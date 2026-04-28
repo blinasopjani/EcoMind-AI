@@ -1,0 +1,390 @@
+📱 EcoMind AI+ Kosovo
+Final Product – Smart Energy Management Mobile App për Republikën e Kosovës
+🎯 QËLLIMI KRYESOR
+
+EcoMind AI+ është një aplikacion mobile inteligjent që ndihmon familjet dhe bizneset në Kosovë të:
+
+monitorojnë konsumin e energjisë elektrike
+analizojnë faturat e rrymës
+identifikojnë pajisjet që harxhojnë më shumë
+marrin rekomandime inteligjente nga AI
+lidhin pajisjet e shtëpisë për monitorim
+kursejnë para reale
+përmirësojnë zakonet përmes gamification
+fitojnë shpërblime për kursimin e energjisë
+marrin njoftime dhe paralajmërime të mençura
+
+Ky aplikacion është një AI Energy Assistant personal, jo vetëm një tracker.
+
+🏗️ STACK TEKNOLOGJIK
+Frontend (Mobile)
+Flutter
+Dart
+
+Për Android + iOS me UI modern, të shpejtë dhe elegant.
+
+Backend
+FastAPI
+Python
+
+Për API të shpejta, AI integrations dhe sistem scalable.
+
+Database
+PostgreSQL
+
+Për ruajtje të sigurt të përdoruesve, faturave dhe analizave.
+
+AI / Machine Learning
+pandas
+scikit-learn
+numpy
+joblib
+OpenCV
+OCR (Tesseract / Google ML Kit)
+
+Për analiza inteligjente dhe scan të faturave.
+
+Authentication
+JWT Authentication
+bcrypt password hashing
+Email verification
+Forgot Password System
+Notifications
+Firebase Cloud Messaging (FCM)
+
+Për alerts, reminders dhe AI tips.
+
+🔐 AUTH SYSTEM
+Login
+Email
+Password
+Remember Me
+Forgot Password
+Google Login
+Register
+Full Name
+Email
+Password
+Confirm Password
+Household Size
+Home Type
+Monthly Budget Goal
+📲 SCREENS KRYESORE
+🟢 1. Dashboard Screen
+Përmban:
+Total Energy Usage (kWh)
+Monthly Bill Estimate (€)
+CO₂ Emissions
+Eco Score
+Savings This Month
+Mini Usage Graph
+Top Energy Consumer Device
+Quick AI Suggestion
+Çfarë fiton klienti?
+
+Menjëherë e sheh ku po harxhon më shumë dhe sa mund të kursejë.
+
+🔵 2. Device Management Screen
+Përmban:
+
+Katrora për secilën pajisje:
+
+Fridge
+TV
+AC
+Washing Machine
+Dishwasher
+Lights
+Heater
+Oven
+PC
+Gaming Console
+Custom Device
+Features:
+add device
+edit device
+delete device
+connect smart devices
+estimate consumption
+track status
+Çfarë fiton klienti?
+
+Kontroll total mbi pajisjet që harxhojnë më shumë energji.
+
+🟣 3. Bill Scan Screen
+Features:
+upload faturë
+take photo
+auto OCR scan
+extract:
+total amount
+kWh
+billing period
+taxes
+monthly comparison
+AI Analysis:
+
+“Fatura juaj është rritur 23% për shkak të AC.”
+
+Çfarë fiton klienti?
+
+Nuk ka nevojë për analiza manuale — aplikacioni e bën automatikisht.
+
+🟡 4. AI Insights Screen
+Përmban:
+
+Mesazhe si:
+
+“Fridge consumes unusually high energy”
+“Night usage is too high”
+“You saved 18€ this month”
+“Try reducing heater usage”
+Chat Style Interface
+Çfarë fiton klienti?
+
+Rekomandime reale dhe të personalizuara për kursim.
+
+🟠 5. Analytics Screen
+Features:
+Line Chart
+Bar Chart
+Weekly Comparison
+Monthly Comparison
+Device Breakdown
+Peak Hour Analysis
+Çfarë fiton klienti?
+
+E kupton saktësisht sjelljen e konsumit të energjisë.
+
+🔴 6. Simulator Screen
+Features:
+
+Slider:
+
+“How much do you want to reduce?”
+
+Output:
+
+money saved
+CO₂ reduced
+yearly projection
+Çfarë fiton klienti?
+
+E sheh para kohe sa do të kursejë.
+
+🟤 7. Gamification Screen
+Features:
+Eco Score
+Daily Streak
+Weekly Challenges
+Monthly Challenges
+Badges
+Leaderboard
+Çfarë fiton klienti?
+
+Motivim për përdorim të përditshëm dhe zakone më të mira.
+
+🟩 8. Goals Screen
+Features:
+
+Set goals:
+
+reduce bill by 20%
+save 50€/month
+reduce night usage
+improve eco score to 90+
+Çfarë fiton klienti?
+
+Objektiva të qarta dhe progres i matshëm.
+
+🔔 9. Notifications Screen
+Features:
+reminders
+alerts
+warnings
+AI tips
+monthly reports
+Çfarë fiton klienti?
+
+Mos harron asnjë mundësi për kursim.
+
+⚙️ 10. Settings + Profile
+Features:
+dark/light mode
+language
+notification settings
+profile management
+connected devices
+export PDF reports
+🤖 SISTEMI AI
+Prediction Model
+
+Random Forest Regression
+
+Parashikon konsumin e ardhshëm.
+
+Anomaly Detection
+
+Isolation Forest
+
+Zbulon:
+
+spikes
+unusual bills
+suspicious usage
+Recommendation Engine
+
+Rule-based + ML Hybrid
+
+Jep rekomandime praktike për kursim.
+
+Bill Forecast AI
+
+Shembull:
+
+“Fatura e muajit tjetër pritet të jetë 84€”
+
+“Nëse fikni ngrohësen më herët → 71€”
+
+Çfarë fiton klienti?
+
+Parashikim real për faturën e ardhshme.
+
+🎮 REWARD SYSTEM
+Eco Rewards
+
+Sa më shumë kursen → aq më shumë fiton.
+
+Formula
+1€ saved = 10 Eco Points
+
+Shembull:
+
+17€ saved
+
+↓
+
+170 points
+
+🏆 Badges
+Green Starter
+Energy Saver
+Eco Hero
+Planet Protector
+Green Master
+💸 Rewards Reale
+Partner Discounts
+
+Me partnerë si:
+
+IPKO
+ArtMotion
+KESCO
+Albi Mall
+ELKOS Center
+Neptun
+
+Për:
+
+discounts
+cashback
+vouchers
+LED lights
+smart plugs
+inverter AC discounts
+Çfarë fiton klienti?
+
+Jo vetëm kursim — por edhe shpërblime reale.
+
+💎 PRICING MODEL
+FREE PLAN
+Përfshin:
+basic dashboard
+basic tracking
+manual bill upload
+eco score
+basic rewards
+Price:
+
+0€
+
+PREMIUM PLAN
+Përfshin:
+Full AI Analysis
+Smart Bill Scanner
+Device Connection
+Advanced Analytics
+Personalized Recommendations
+Full Rewards System
+Monthly PDF Reports
+Priority Notifications
+Goal Tracking Advanced
+Price:
+
+2.99€/muaj
+ose
+24.99€/vit
+
+FAMILY PLAN
+Përfshin:
+5 users
+shared dashboard
+family challenges
+bigger rewards
+Price:
+
+5.99€/muaj
+
+BUSINESS PLAN
+
+Për:
+
+kafiteri
+restorante
+markete
+zyra
+biznese të vogla
+Price:
+
+19.99€/muaj
+
+🎨 UI/UX DESIGN
+Design Style
+modern
+premium
+jo i zymtë
+green + blue + white accents
+rounded cards
+soft shadows
+smooth animations
+startup-level design
+
+Ky aplikacion duhet të duket si produkt real i tregut.
+
+🇽🇰 PSE VLEN PËR KOSOVËN
+
+Sepse:
+
+faturat e rrymës janë problem real
+energjia po shtrenjtohet
+familjet kërkojnë kontroll më të mirë
+bizneset duan optimizim
+reward system i motivon përdoruesit
+
+Ky aplikacion zgjidh një problem real të tregut.
+
+🚀 FINAL OUTPUT
+
+EcoMind AI+ Kosovo është një aplikacion production-level me potencial startup real që:
+
+ndihmon familjet
+ndihmon bizneset
+kursen energji
+kursen para
+përdor AI në mënyrë praktike
+shpërblen përdoruesit
+krijon zakon të përditshëm përdorimi
+🏆 FINAL PITCH
+“Save electricity. Save money. Get rewarded.”
+EcoMind AI+ Kosovo
+Your Personal AI Assistant for Energy Saving
