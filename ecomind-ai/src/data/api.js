@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Adresa e serverit tuaj (Nëse jeni në localhost me telefon, përdorni IP-në e kompjuterit)
-const BASE_URL = 'http://192.168.0.147:8000'; 
+// Adresa e serverit tuaj (Mund të jetë localhost ose adresa e production në Railway)
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.147:8000'; 
 
 const api = axios.create({
   baseURL: BASE_URL,
