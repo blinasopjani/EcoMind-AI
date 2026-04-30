@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
+import { supabase } from '../data/supabase';
 
 export default function RegisterScreen({ navigation }) {
   const { theme } = useTheme();
@@ -11,6 +12,30 @@ export default function RegisterScreen({ navigation }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  const handleRegister = async () => {
+    if (!name || !email || !password) {
+      Alert.alert('Gabim', 'Ju lutem plotësoni të gjitha fushat.');
+      return;
+    }
+
+    try {
+      // Futja e të dhënave DIREKT në Supabase!
+      const { error } = await supabase
+        .from('users')
+        .insert([
+          { full_name: name, email: email, password: password }
+        ]);
+
+      if (error) throw error;
+      
+      navigation.replace('Main');
+    } catch (error) {
+      console.log('Supabase Insert Error:', error);
+      Alert.alert('Arsyeja e dështimit:', error.message || JSON.stringify(error));
+      navigation.replace('Main');
+    }
+  };
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.container}>
@@ -49,7 +74,7 @@ export default function RegisterScreen({ navigation }) {
             </View>
           </View>
 
-          <TouchableOpacity style={s.registerBtn} onPress={() => navigation.replace('Main')}>
+          <TouchableOpacity style={s.registerBtn} onPress={handleRegister}>
             <LinearGradient colors={theme.gradientPrimary} style={s.gradientBtn} start={{x:0, y:0}} end={{x:1, y:0}}>
               <Text style={s.registerBtnText}>Regjistrohu</Text>
             </LinearGradient>

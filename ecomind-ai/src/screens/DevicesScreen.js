@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Modal, Te
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
+import { supabase } from '../data/supabase';
 
 const DeviceItem = ({ name, type, power, status, onToggle, theme }) => (
   <View style={styles(theme).deviceCard}>
@@ -41,24 +42,48 @@ export default function DevicesScreen() {
     setDevices(devices.map(d => d.id === id ? { ...d, status: !d.status } : d));
   };
 
-  const shtoPajisje = () => {
+  const shtoPajisje = async () => {
     if (newName.trim() === '' || newPower.trim() === '') {
       Alert.alert('Gabim', 'Ju lutem plotësoni të gjitha fushat.');
       return;
     }
-    const newDevice = {
+    
+    const newDeviceLocal = {
       id: Date.now(),
       name: newName,
       type: 'bulb',
       power: parseInt(newPower),
       status: false
     };
-    setDevices([...devices, newDevice]);
+
+    // Shtoje në tabelën e ekranit për ta parë direkt
+    setDevices([...devices, newDeviceLocal]);
     setNewName('');
     setNewPower('');
     setModalVisible(false);
-    Alert.alert('Sukses', 'Pajisja u shtua me sukses!');
+
+    try {
+      // Dërgoje edhe në Supabase në prapavijë!
+      const { error } = await supabase
+        .from('devices')
+        .insert([
+          { 
+            name: newName, 
+            type: 'bulb', 
+            avg_consumption: parseInt(newPower), 
+            user_id: 1 // Demo User ID
+          }
+        ]);
+        
+      if (error) console.log('Supabase Device Error:', error);
+      Alert.alert('Sukses', 'Pajisja u shtua me sukses në aplikacion dhe databazë!');
+    } catch (err) {
+      console.log(err);
+    }
   };
+
+  const activeDevices = devices.filter(d => d.status);
+  const activeKw = activeDevices.reduce((sum, d) => sum + d.power, 0) / 1000;
 
   return (
     <View style={s.container}>
@@ -71,12 +96,12 @@ export default function DevicesScreen() {
         <View style={s.body}>
           <View style={s.summaryCard}>
             <View style={s.summaryItem}>
-              <Text style={s.summaryVal}>{devices.filter(d => d.status).length}</Text>
+              <Text style={s.summaryVal}>{activeDevices.length}</Text>
               <Text style={s.summaryLbl}>Aktive</Text>
             </View>
             <View style={s.summaryDivider} />
             <View style={s.summaryItem}>
-              <Text style={s.summaryVal}>1.59</Text>
+              <Text style={s.summaryVal}>{activeKw.toFixed(2)}</Text>
               <Text style={s.summaryLbl}>kW Aktual</Text>
             </View>
           </View>

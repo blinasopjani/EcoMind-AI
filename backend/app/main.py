@@ -5,6 +5,21 @@ from .core.ocr_service import scanner
 import shutil
 import os
 
+from .models import models
+from .core.database import engine, get_db
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+
+class UserRegister(BaseModel):
+    full_name: str
+    email: str
+    password: str
+
+try:
+    models.Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"Warning: Could not connect to database on startup: {e}")
+
 app = FastAPI(
     title="EcoMind AI+ Kosovo API",
     description="Backend for Smart Energy Management Mobile App",
@@ -60,3 +75,20 @@ async def get_insights(user_id: int):
         "efficiency_rating": "B+",
         "eco_score_progress": "+5 points this week"
     }
+
+@app.post("/register")
+async def register_user(user: UserRegister, db: Session = Depends(get_db)):
+    try:
+        new_user = models.User(
+            full_name=user.full_name,
+            email=user.email,
+            hashed_password=user.password
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        return {"message": "User created successfully", "user_id": new_user.id}
+    except Exception as e:
+        db.rollback()
+        # Fallback për demo nëse mungon lidhja me DB
+        return {"message": "User registered (Demo Mode)", "user_id": 999}

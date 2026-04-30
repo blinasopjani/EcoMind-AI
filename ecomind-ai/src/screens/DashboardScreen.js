@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../theme/ThemeContext';
 import { dashboardData } from '../data/mockData';
+import { EnergyAPI } from '../data/api';
 
 const { width } = Dimensions.get('window');
 
@@ -56,11 +57,26 @@ export default function DashboardScreen({ navigation }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
+  const [aiSuggestion, setAiSuggestion] = useState(dashboardData.aiSuggestion);
+
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
     ]).start();
+
+    // Fetch real AI insights
+    const fetchInsights = async () => {
+      try {
+        const data = await EnergyAPI.getInsights(1); // Demo user ID
+        if (data && data.suggestion) {
+          setAiSuggestion(data.suggestion);
+        }
+      } catch (error) {
+        console.log('Using mock insights as fallback');
+      }
+    };
+    fetchInsights();
   }, []);
 
   return (
@@ -158,7 +174,7 @@ export default function DashboardScreen({ navigation }) {
         <Text style={s.sectionTitle}>Sugjerim AI</Text>
         <LinearGradient colors={theme.gradientPrimary} style={s.aiCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
           <Ionicons name="bulb" size={24} color="#fff" style={{ marginRight: 12 }} />
-          <Text style={s.aiText}>{dashboardData.aiSuggestion}</Text>
+          <Text style={s.aiText}>{aiSuggestion}</Text>
         </LinearGradient>
       </View>
     </ScrollView>

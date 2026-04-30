@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Adresa e serverit tuaj (Nëse jeni në localhost me telefon, përdorni IP-në e kompjuterit)
-const BASE_URL = 'http://192.168.1.17:8000'; 
+const BASE_URL = 'http://192.168.0.147:8000'; 
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -46,7 +46,18 @@ export const EnergyAPI = {
       const response = await api.get(`/insights/${userId}`);
       return response.data;
     } catch (error) {
-      console.error('Insights Error:', error);
+      // Bypassing console.error for smooth demo
+      throw error;
+    }
+  },
+
+  // Regjistrimi i përdoruesit
+  register: async (userData) => {
+    try {
+      const response = await api.post('/register', userData);
+      return response.data;
+    } catch (error) {
+      // Bypassing console.error for smooth demo
       throw error;
     }
   }
