@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Adresa e serverit tuaj (Mund të jetë localhost ose adresa e production në Railway)
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.147:8000'; 
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ecomind-ai-production.up.railway.app'; 
 
 const api = axios.create({
   baseURL: BASE_URL,
