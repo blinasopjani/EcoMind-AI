@@ -9,5 +9,5 @@ python-multipart
 python-dotenv
 pandas
 scikit-learn
-opencv-python
+opencv-python-headless
 pytesseract
