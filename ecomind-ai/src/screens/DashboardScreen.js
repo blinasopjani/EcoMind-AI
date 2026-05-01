@@ -22,6 +22,9 @@ export default function DashboardScreen({ navigation }) {
   const { theme, isDarkMode } = useTheme();
   const s = styles(theme);
 
+  console.log('Dashboard v2.2 active - Netlify Stable Build');
+
+
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
   const [stats, setStats] = useState({
@@ -165,10 +168,12 @@ export default function DashboardScreen({ navigation }) {
             <Ionicons name="earth" size={80} color="rgba(255,255,255,0.05)" style={s.earthIcon} />
           </LinearGradient>
 
+          <Text style={{ textAlign: 'center', color: theme.textMuted, fontSize: 10, marginBottom: 20 }}>EcoMind AI+ v2.2 (Netlify Stable)</Text>
           <View style={{ height: 120 }} />
         </View>
       </ScrollView>
     </View>
+
   );
 }
 
