@@ -1,30 +1,37 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, FlatList, Dimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Dimensions, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
-const PrizeCard = ({ title, company, points, icon, gradient, theme }) => (
-  <View style={styles(theme).prizeCard}>
-    <LinearGradient colors={gradient} style={styles(theme).prizeIcon}>
-      <Ionicons name={icon} size={28} color="#fff" />
-    </LinearGradient>
-    <View style={styles(theme).prizeInfo}>
-      <Text style={styles(theme).prizeTitle}>{title}</Text>
-      <Text style={styles(theme).prizeCompany}>{company}</Text>
+const PrizeCard = ({ title, company, points, icon, gradient, theme, userPoints, onRedeem }) => {
+  const canAfford = userPoints >= points;
+  return (
+    <View style={[styles(theme).prizeCard, !canAfford && { opacity: 0.6 }]}>
+      <LinearGradient colors={gradient} style={styles(theme).prizeIcon}>
+        <Ionicons name={icon} size={28} color="#fff" />
+      </LinearGradient>
+      <View style={styles(theme).prizeInfo}>
+        <Text style={styles(theme).prizeTitle}>{title}</Text>
+        <Text style={styles(theme).prizeCompany}>{company}</Text>
+      </View>
+      <TouchableOpacity 
+        style={[styles(theme).pointsBadge, canAfford && { backgroundColor: theme.primary }]}
+        onPress={() => canAfford && onRedeem(title, points)}
+      >
+        <Text style={[styles(theme).pointsText, canAfford && { color: '#fff' }]}>{points} pts</Text>
+      </TouchableOpacity>
     </View>
-    <View style={styles(theme).pointsBadge}>
-      <Text style={styles(theme).pointsText}>{points} pts</Text>
-    </View>
-  </View>
-);
+  );
+};
 
-const ChallengeCard = ({ title, sub, points, time, icon, color, theme }) => (
-  <View style={styles(theme).challengeCard}>
-    <View style={[styles(theme).challengeIcon, { backgroundColor: `${color}15` }]}>
-      <Ionicons name={icon} size={24} color={color} />
+const ChallengeCard = ({ id, title, sub, points, time, icon, color, theme, onStart, isCompleted }) => (
+  <View style={[styles(theme).challengeCard, isCompleted && { borderColor: theme.success, borderWidth: 1.5 }]}>
+    <View style={[styles(theme).challengeIcon, { backgroundColor: isCompleted ? theme.success + '20' : `${color}15` }]}>
+      <Ionicons name={isCompleted ? "checkmark" : icon} size={24} color={isCompleted ? theme.success : color} />
     </View>
     <View style={{ flex: 1, marginLeft: 15 }}>
       <Text style={styles(theme).challengeTitle}>{title}</Text>
@@ -33,11 +40,15 @@ const ChallengeCard = ({ title, sub, points, time, icon, color, theme }) => (
         <Ionicons name="time-outline" size={12} color={theme.textMuted} />
         <Text style={styles(theme).challengeMetaText}>{time}</Text>
         <Ionicons name="star" size={12} color="#F59E0B" style={{ marginLeft: 10 }} />
-        <Text style={styles(theme).challengeMetaText}>+{points} Pika</Text>
+        <Text style={styles(theme).challengeMetaText}>+{points} Pikë</Text>
       </View>
     </View>
-    <TouchableOpacity style={[styles(theme).startBtn, { backgroundColor: color }]}>
-      <Text style={styles(theme).startBtnText}>Nisja</Text>
+    <TouchableOpacity 
+      disabled={isCompleted}
+      onPress={() => onStart(id, points)}
+      style={[styles(theme).startBtn, { backgroundColor: isCompleted ? theme.success : color }]}
+    >
+      <Text style={styles(theme).startBtnText}>{isCompleted ? 'E kryer' : 'Nisja'}</Text>
     </TouchableOpacity>
   </View>
 );
@@ -47,6 +58,86 @@ export default function GamificationScreen() {
   const s = styles(theme);
 
   const [activeTab, setActiveTab] = useState('sfidat');
+  const [points, setPoints] = useState(0);
+  const [level, setLevel] = useState(1);
+  const [completedChallenges, setCompletedChallenges] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const loadStats = async () => {
+    try {
+      const savedPoints = await AsyncStorage.getItem('user_points');
+      const savedLevel = await AsyncStorage.getItem('user_level');
+      const savedChallenges = await AsyncStorage.getItem('completed_challenges');
+      
+      if (savedPoints) setPoints(parseInt(savedPoints));
+      if (savedLevel) setLevel(parseInt(savedLevel));
+      if (savedChallenges) setCompletedChallenges(JSON.parse(savedChallenges));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStartChallenge = async (id, challengePoints) => {
+    if (completedChallenges.includes(id)) return;
+
+    Alert.alert(
+      "Sfidë e Re",
+      `A dëshiron të fillosh këtë sfidë për ${challengePoints} pikë?`,
+      [
+        { text: "Anulo", style: "cancel" },
+        { 
+          text: "Fillo", 
+          onPress: async () => {
+            // Simulojmë përfundimin për këtë demo, ose mund të shtohet timer
+            const newPoints = points + challengePoints;
+            const newChallenges = [...completedChallenges, id];
+            const newLevel = Math.floor(newPoints / 1000) + 1;
+
+            setPoints(newPoints);
+            setCompletedChallenges(newChallenges);
+            setLevel(newLevel);
+
+            await AsyncStorage.setItem('user_points', newPoints.toString());
+            await AsyncStorage.setItem('user_level', newLevel.toString());
+            await AsyncStorage.setItem('completed_challenges', JSON.stringify(newChallenges));
+
+            Alert.alert("Urime!", `Fitove ${challengePoints} pikë!`);
+          } 
+        }
+      ]
+    );
+  };
+
+  const handleRedeem = (title, cost) => {
+    Alert.alert(
+      "Përdor Pikët",
+      `A dëshiron të shkëmbesh ${cost} pikë për "${title}"?`,
+      [
+        { text: "Jo", style: "cancel" },
+        { 
+          text: "Po", 
+          onPress: async () => {
+            const newPoints = points - cost;
+            setPoints(newPoints);
+            await AsyncStorage.setItem('user_points', newPoints.toString());
+            Alert.alert("Sukses!", "Kodi juaj për shpërblimin u dërgua në email.");
+          } 
+        }
+      ]
+    );
+  };
+
+  const nextLevelXp = level * 1000;
+  const currentLevelXp = points % 1000;
+  const progress = (currentLevelXp / 1000) * 100;
+
+  if (loading) return <View style={[s.container, {justifyContent:'center'}]}><ActivityIndicator color={theme.primary} /></View>;
 
   return (
     <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
@@ -57,30 +148,30 @@ export default function GamificationScreen() {
             <Text style={s.headerSub}>Luaj dhe fito shpërblime reale</Text>
           </View>
           <View style={s.rankBadge}>
-            <Text style={s.rankText}>#12 në Kosovë</Text>
+            <Text style={s.rankText}>#{(10000 / (points + 1)).toFixed(0)} në Kosovë</Text>
           </View>
         </View>
 
         <LinearGradient colors={['#7C3AED', '#5B21B6']} style={s.statsCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
           <View style={s.statsRow}>
             <View style={s.statItem}>
-              <Text style={s.statVal}>2,450</Text>
+              <Text style={s.statVal}>{points.toLocaleString()}</Text>
               <Text style={s.statLbl}>Pikët Totale</Text>
             </View>
             <View style={s.statDivider} />
             <View style={s.statItem}>
-              <Text style={s.statVal}>Lvl 4</Text>
-              <Text style={s.statLbl}>Eco Warrior</Text>
+              <Text style={s.statVal}>Lvl {level}</Text>
+              <Text style={s.statLbl}>{level > 5 ? 'Eco Master' : 'Eco Warrior'}</Text>
             </View>
           </View>
           <View style={s.xpBarBg}>
-            <View style={[s.xpBarFill, { width: '65%' }]} />
+            <View style={[s.xpBarFill, { width: `${progress}%` }]} />
           </View>
-          <Text style={s.xpText}>Edhe 550 pikë për Lvl 5</Text>
+          <Text style={s.xpText}>Edhe {1000 - currentLevelXp} pikë për Lvl {level + 1}</Text>
         </LinearGradient>
 
         <View style={s.tabBar}>
-          {['Sfidat', 'Shpërblimet', 'Leaderboard'].map((tab) => (
+          {['Sfidat', 'Shpërblimet'].map((tab) => (
             <TouchableOpacity 
               key={tab} 
               onPress={() => setActiveTab(tab.toLowerCase())}
@@ -97,6 +188,7 @@ export default function GamificationScreen() {
           <>
             <Text style={s.sectionTitle}>Sfidat Javore</Text>
             <ChallengeCard 
+              id="c1"
               title="Shkyçja (Blackout)" 
               sub="Fikni të gjitha pajisjet për 1 orë." 
               points={500} 
@@ -104,8 +196,11 @@ export default function GamificationScreen() {
               icon="power" 
               color="#EF4444" 
               theme={theme} 
+              onStart={handleStartChallenge}
+              isCompleted={completedChallenges.includes('c1')}
             />
             <ChallengeCard 
+              id="c2"
               title="Eco Mode Only" 
               sub="Përdorni rrobëlarësen vetëm në Eco." 
               points={200} 
@@ -113,8 +208,11 @@ export default function GamificationScreen() {
               icon="leaf" 
               color="#00C896" 
               theme={theme} 
+              onStart={handleStartChallenge}
+              isCompleted={completedChallenges.includes('c2')}
             />
             <ChallengeCard 
+              id="c3"
               title="Gatimi i Mençur" 
               sub="Mos hapni furrën gjatë pjekjes." 
               points={100} 
@@ -122,6 +220,8 @@ export default function GamificationScreen() {
               icon="restaurant" 
               color="#F59E0B" 
               theme={theme} 
+              onStart={handleStartChallenge}
+              isCompleted={completedChallenges.includes('c3')}
             />
           </>
         )}
@@ -136,6 +236,8 @@ export default function GamificationScreen() {
               icon="cart" 
               gradient={['#00C896', '#00A87A']} 
               theme={theme} 
+              userPoints={points}
+              onRedeem={handleRedeem}
             />
             <PrizeCard 
               title="Internet 100GB Gratis" 
@@ -144,6 +246,8 @@ export default function GamificationScreen() {
               icon="globe" 
               gradient={['#1A73E8', '#1557B0']} 
               theme={theme} 
+              userPoints={points}
+              onRedeem={handleRedeem}
             />
             <PrizeCard 
               title="Paketa Sportive - 1 Muaj" 
@@ -152,14 +256,8 @@ export default function GamificationScreen() {
               icon="tv" 
               gradient={['#EF4444', '#DC2626']} 
               theme={theme} 
-            />
-            <PrizeCard 
-              title="Kupon 20€ Zbritje" 
-              company="AZTECH" 
-              points={2500} 
-              icon="gift" 
-              gradient={['#7C3AED', '#5B21B6']} 
-              theme={theme} 
+              userPoints={points}
+              onRedeem={handleRedeem}
             />
           </>
         )}

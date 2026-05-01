@@ -1,25 +1,34 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Modal, TextInput, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Modal, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DeviceItem = ({ name, type, power, status, onToggle, theme }) => (
+const DeviceItem = ({ id, name, type, power, status, onToggle, onEdit, onDelete, theme }) => (
   <View style={styles(theme).deviceCard}>
     <View style={styles(theme).deviceIconContainer}>
       <Ionicons name={type === 'ac' ? 'snow' : type === 'tv' ? 'tv' : 'bulb'} size={24} color={theme.primary} />
     </View>
-    <View style={styles(theme).deviceInfo}>
+    <View style={{ flex: 1 }}>
       <Text style={styles(theme).deviceName}>{name}</Text>
       <Text style={styles(theme).deviceSub}>{power} W • {status ? 'Ndezur' : 'Fikur'}</Text>
     </View>
-    <Switch
-      value={status}
-      onValueChange={onToggle}
-      trackColor={{ false: theme.border, true: 'rgba(0,200,150,0.4)' }}
-      thumbColor={status ? theme.primary : theme.textMuted}
-    />
+    <View style={styles(theme).deviceActions}>
+      <TouchableOpacity onPress={() => onEdit({ id, name, power, type })} style={styles(theme).actionBtn}>
+        <Ionicons name="pencil" size={16} color={theme.textSecondary} />
+      </TouchableOpacity>
+      <TouchableOpacity onPress={() => onDelete(id)} style={styles(theme).actionBtn}>
+        <Ionicons name="trash" size={16} color="#FF4D4D" />
+      </TouchableOpacity>
+      <Switch
+        value={status}
+        onValueChange={() => onToggle(id, !status)}
+        trackColor={{ false: theme.border, true: theme.primary + '60' }}
+        thumbColor={status ? theme.primary : theme.textMuted}
+      />
+    </View>
   </View>
 );
 
@@ -27,143 +36,143 @@ export default function DevicesScreen() {
   const { theme, isDarkMode } = useTheme();
   const s = styles(theme);
 
-  const [devices, setDevices] = useState([
-    { id: 1, name: 'Kondicioneri - Dhoma', type: 'ac', power: 1200, status: true },
-    { id: 2, name: 'Smart TV', type: 'tv', power: 150, status: false },
-    { id: 3, name: 'Ndriçimi - Salloni', type: 'bulb', power: 40, status: true },
-    { id: 4, name: 'Frigoriferi', type: 'bulb', power: 200, status: true },
-  ]);
-
+  const [devices, setDevices] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [newName, setNewName] = useState('');
   const [newPower, setNewPower] = useState('');
+  const [userId, setUserId] = useState(null);
+  const [debugLog, setDebugLog] = useState('');
 
-  const toggleDevice = (id) => {
-    setDevices(devices.map(d => d.id === id ? { ...d, status: !d.status } : d));
+  useEffect(() => {
+    const getUserId = async () => {
+      const id = await AsyncStorage.getItem('user_id');
+      if (id) {
+        setUserId(id);
+        fetchDevices(id);
+      }
+    };
+    getUserId();
+  }, []);
+
+  const fetchDevices = async (uid) => {
+    setLoading(true);
+    setDebugLog('Duke kërkuar pajisjet tuaja...');
+    try {
+      const { data, error } = await supabase
+        .from('devices')
+        .select('*')
+        .eq('user_id', uid); // FILTER BY USER ID
+
+      if (error) throw error;
+      if (data) {
+        setDevices(data.map(d => ({
+          id: d.id,
+          name: d.name || 'Pa emër',
+          type: d.type || 'bulb',
+          power: d.avg_consumption || d.power || 0,
+          status: false
+        })));
+        setDebugLog(`Gjeta ${data.length} pajisje për llogarinë tuaj.`);
+      }
+    } catch (err) {
+      setDebugLog('Error: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const shtoPajisje = async () => {
-    if (newName.trim() === '' || newPower.trim() === '') {
-      Alert.alert('Gabim', 'Ju lutem plotësoni të gjitha fushat.');
-      return;
-    }
-    
-    const newDeviceLocal = {
-      id: Date.now(),
-      name: newName,
-      type: 'bulb',
-      power: parseInt(newPower),
-      status: false
-    };
-
-    // Shtoje në tabelën e ekranit për ta parë direkt
-    setDevices([...devices, newDeviceLocal]);
-    setNewName('');
-    setNewPower('');
-    setModalVisible(false);
-
+  const ruajPajisje = async () => {
+    if (!newName.trim() || !newPower.trim() || !userId) return;
+    setLoading(true);
     try {
-      // Dërgoje edhe në Supabase në prapavijë!
-      const { error } = await supabase
-        .from('devices')
-        .insert([
-          { 
-            name: newName, 
-            type: 'bulb', 
-            avg_consumption: parseInt(newPower), 
-            user_id: 1 // Demo User ID
-          }
-        ]);
-        
-      if (error) console.log('Supabase Device Error:', error);
-      Alert.alert('Sukses', 'Pajisja u shtua me sukses në aplikacion dhe databazë!');
+      const payload = { 
+        name: newName.trim(), 
+        avg_consumption: parseInt(newPower),
+        user_id: userId // SAVE USER ID
+      };
+
+      if (editingId) {
+        await supabase.from('devices').update(payload).eq('id', editingId);
+      } else {
+        await supabase.from('devices').insert([payload]);
+      }
+      setModalVisible(false);
+      fetchDevices(userId);
     } catch (err) {
-      console.log(err);
+      Alert.alert('Gabim', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteDevice = async (id) => {
+    try {
+      const { error } = await supabase.from('devices').delete().eq('id', id);
+      if (error) throw error;
+      fetchDevices(userId);
+    } catch (err) {
+      Alert.alert('Gabim', err.message);
     }
   };
 
   const activeDevices = devices.filter(d => d.status);
-  const activeKw = activeDevices.reduce((sum, d) => sum + d.power, 0) / 1000;
+  const totalW = activeDevices.reduce((sum, d) => sum + d.power, 0);
 
   return (
     <View style={s.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
-          <Text style={s.headerTitle}>Pajisjet</Text>
-          <Text style={s.headerSub}>Menaxho pajisjet tuaja smart</Text>
+          <Text style={s.headerTitle}>Pajisjet Tuaja</Text>
+          <Text style={s.headerSub}>Secili account sheh pajisjet e veta</Text>
         </LinearGradient>
 
         <View style={s.body}>
-          <View style={s.summaryCard}>
-            <View style={s.summaryItem}>
-              <Text style={s.summaryVal}>{activeDevices.length}</Text>
-              <Text style={s.summaryLbl}>Aktive</Text>
-            </View>
-            <View style={s.summaryDivider} />
-            <View style={s.summaryItem}>
-              <Text style={s.summaryVal}>{activeKw.toFixed(2)}</Text>
-              <Text style={s.summaryLbl}>kW Aktual</Text>
-            </View>
+          <View style={s.consumptionCard}>
+            <LinearGradient colors={[theme.primary, theme.secondary]} style={s.consumptionGradient}>
+              <Text style={s.consLabel}>AKTIVE: {activeDevices.length}</Text>
+              <Text style={s.consValue}>{totalW} W</Text>
+            </LinearGradient>
           </View>
 
-          <Text style={s.sectionTitle}>Pajisjet e Lidhura</Text>
-          {devices.map(device => (
-            <DeviceItem 
-              key={device.id} 
-              {...device} 
-              onToggle={() => toggleDevice(device.id)} 
-              theme={theme} 
-            />
-          ))}
+          {loading && devices.length === 0 ? (
+            <ActivityIndicator size="large" color={theme.primary} />
+          ) : (
+            <>
+              {devices.length === 0 && <Text style={s.emptyText}>Nuk keni asnjë pajisje në këtë llogari.</Text>}
+              {devices.map(device => (
+                <DeviceItem 
+                  key={device.id} 
+                  {...device} 
+                  onToggle={(id, st) => setDevices(devices.map(d => d.id === id ? {...d, status: st} : d))}
+                  onEdit={(d) => { setEditingId(d.id); setNewName(d.name); setNewPower(d.power.toString()); setModalVisible(true); }}
+                  onDelete={deleteDevice}
+                  theme={theme} 
+                />
+              ))}
+              <TouchableOpacity style={s.addBtn} onPress={() => { setEditingId(null); setNewName(''); setNewPower(''); setModalVisible(true); }}>
+                <Ionicons name="add-circle" size={24} color="#fff" />
+                <Text style={s.addBtnText}>Shto Pajisje</Text>
+              </TouchableOpacity>
+            </>
+          )}
 
-          <TouchableOpacity style={s.addBtn} onPress={() => setModalVisible(true)}>
-            <Ionicons name="add-circle" size={22} color="#fff" />
-            <Text style={s.addBtnText}>Shto Pajisje të Re</Text>
-          </TouchableOpacity>
-          
-          <View style={{ height: 120 }} />
+          <View style={s.debugPanel}>
+            <Text style={s.debugText}>{debugLog}</Text>
+          </View>
+          <View style={{ height: 100 }} />
         </View>
       </ScrollView>
 
-      {/* Modal për shtimin e pajisjes */}
-      <Modal visible={modalVisible} transparent animationType="slide">
+      <Modal visible={modalVisible} transparent animationType="fade">
         <View style={s.modalOverlay}>
           <View style={s.modalContent}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Shto Pajisje</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color={theme.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={s.inputGroup}>
-              <Text style={s.label}>Emri i Pajisjes</Text>
-              <TextInput 
-                style={s.input} 
-                placeholder="p.sh. Lavatriçja" 
-                placeholderTextColor={theme.textMuted}
-                value={newName}
-                onChangeText={setNewName}
-              />
-            </View>
-
-            <View style={s.inputGroup}>
-              <Text style={s.label}>Fuqia (W)</Text>
-              <TextInput 
-                style={s.input} 
-                placeholder="p.sh. 2000" 
-                placeholderTextColor={theme.textMuted}
-                value={newPower}
-                onChangeText={setNewPower}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <TouchableOpacity style={s.saveBtn} onPress={shtoPajisje}>
-              <LinearGradient colors={theme.gradientPrimary} style={s.saveBtnInner}>
-                <Text style={s.saveBtnText}>Konfirmo Shtimin</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+            <Text style={s.modalTitle}>{editingId ? 'Edito' : 'Shto'}</Text>
+            <TextInput style={s.input} value={newName} onChangeText={setNewName} placeholder="Emri" placeholderTextColor={theme.textMuted} />
+            <TextInput style={s.input} value={newPower} onChangeText={setNewPower} placeholder="Fuqia (W)" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
+            <TouchableOpacity style={s.saveBtn} onPress={ruajPajisje}><Text style={s.saveBtnText}>Ruaj</Text></TouchableOpacity>
+            <TouchableOpacity style={{ marginTop: 10, alignItems: 'center' }} onPress={() => setModalVisible(false)}><Text style={{ color: theme.textSecondary }}>Anulo</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -173,32 +182,29 @@ export default function DevicesScreen() {
 
 const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
-  header: { paddingTop: 55, paddingHorizontal: 20, paddingBottom: 24 },
-  headerTitle: { color: theme.textPrimary, fontSize: 26, fontWeight: '800' },
-  headerSub: { color: theme.textSecondary, fontSize: 14, marginTop: 4 },
+  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 25 },
+  headerTitle: { color: theme.textPrimary, fontSize: 24, fontWeight: '800' },
+  headerSub: { color: theme.textSecondary, fontSize: 13, marginTop: 4 },
   body: { padding: 20 },
-  summaryCard: { backgroundColor: theme.card, borderRadius: 24, padding: 20, flexDirection: 'row', marginBottom: 24, borderWidth: 1, borderColor: theme.border },
-  summaryItem: { flex: 1, alignItems: 'center' },
-  summaryVal: { color: theme.textPrimary, fontSize: 22, fontWeight: '800' },
-  summaryLbl: { color: theme.textSecondary, fontSize: 12, marginTop: 4 },
-  summaryDivider: { width: 1, height: '100%', backgroundColor: theme.border },
-  sectionTitle: { color: theme.textPrimary, fontSize: 17, fontWeight: '700', marginBottom: 16 },
-  deviceCard: { backgroundColor: theme.card, borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: theme.border },
-  deviceIconContainer: { width: 48, height: 48, borderRadius: 14, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-  deviceInfo: { flex: 1 },
+  consumptionCard: { borderRadius: 20, overflow: 'hidden', marginBottom: 20 },
+  consumptionGradient: { padding: 20, alignItems: 'center' },
+  consLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '700' },
+  consValue: { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 5 },
+  deviceCard: { backgroundColor: theme.card, borderRadius: 18, padding: 15, flexDirection: 'row', alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: theme.border },
+  deviceIconContainer: { width: 44, height: 44, borderRadius: 12, backgroundColor: theme.primary + '10', alignItems: 'center', justifyContent: 'center', marginRight: 15 },
   deviceName: { color: theme.textPrimary, fontSize: 15, fontWeight: '700' },
-  deviceSub: { color: theme.textSecondary, fontSize: 12, marginTop: 4 },
-  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary, borderRadius: 18, padding: 18, marginTop: 12, gap: 10, shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
+  deviceSub: { color: theme.textSecondary, fontSize: 12, marginTop: 2 },
+  deviceActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  actionBtn: { padding: 5 },
+  addBtn: { backgroundColor: theme.primary, borderRadius: 15, padding: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 15 },
   addBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalTitle: { color: theme.textPrimary, fontSize: 20, fontWeight: '800' },
-  inputGroup: { marginBottom: 20 },
-  label: { color: theme.textPrimary, fontSize: 14, fontWeight: '700', marginBottom: 10 },
-  input: { backgroundColor: theme.background, borderRadius: 16, padding: 16, color: theme.textPrimary, fontSize: 16, borderWidth: 1, borderColor: theme.border },
-  saveBtn: { borderRadius: 18, overflow: 'hidden', marginTop: 10 },
-  saveBtnInner: { padding: 18, alignItems: 'center' },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  emptyText: { color: theme.textMuted, textAlign: 'center', marginVertical: 20 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 },
+  modalContent: { backgroundColor: theme.card, borderRadius: 24, padding: 25 },
+  modalTitle: { color: theme.textPrimary, fontSize: 18, fontWeight: '800', marginBottom: 20 },
+  input: { backgroundColor: theme.background, borderRadius: 12, padding: 14, color: theme.textPrimary, marginBottom: 15, borderWidth: 1, borderColor: theme.border },
+  saveBtn: { backgroundColor: theme.primary, borderRadius: 12, padding: 15, alignItems: 'center' },
+  saveBtnText: { color: '#fff', fontWeight: '800' },
+  debugPanel: { marginTop: 30, padding: 10, backgroundColor: '#000', borderRadius: 8 },
+  debugText: { color: '#0f0', fontSize: 10, fontFamily: 'monospace' },
 });

@@ -1,229 +1,211 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Animated, Dimensions,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, RefreshControl, Dimensions, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../theme/ThemeContext';
-import { dashboardData } from '../data/mockData';
-import { EnergyAPI } from '../data/api';
+import { supabase } from '../data/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
-const StatCard = ({ title, value, unit, icon, gradient, theme }) => {
-  const scale = useRef(new Animated.Value(1)).current;
-  const press = () => {
-    Animated.sequence([
-      Animated.timing(scale, { toValue: 0.95, duration: 100, useNativeDriver: true }),
-      Animated.timing(scale, { toValue: 1, duration: 100, useNativeDriver: true }),
-    ]).start();
-  };
-  const s = styles(theme);
-  return (
-    <TouchableOpacity onPress={press} activeOpacity={0.9}>
-      <Animated.View style={[s.statCard, { transform: [{ scale }] }]}>
-        <LinearGradient colors={gradient} style={s.statGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-          <View style={s.statIcon}>
-            <Ionicons name={icon} size={22} color="#fff" />
-          </View>
-          <Text style={s.statValue}>{value}<Text style={s.statUnit}> {unit}</Text></Text>
-          <Text style={s.statTitle}>{title}</Text>
-        </LinearGradient>
-      </Animated.View>
-    </TouchableOpacity>
-  );
-};
-
-const MiniBar = ({ value, max, color, theme }) => {
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(anim, { toValue: (value / max) * (width * 0.55), duration: 800, useNativeDriver: false }).start();
-  }, []);
-  const s = styles(theme);
-  return (
-    <View style={s.barBg}>
-      <Animated.View style={[s.barFill, { width: anim, backgroundColor: color }]} />
+const QuickAction = ({ icon, label, color, onPress, theme }) => (
+  <TouchableOpacity style={styles(theme).actionCard} onPress={onPress} activeOpacity={0.7}>
+    <View style={[styles(theme).actionIcon, { backgroundColor: color + '15' }]}>
+      <Ionicons name={icon} size={22} color={color} />
     </View>
-  );
-};
+    <Text style={styles(theme).actionLabel}>{label}</Text>
+  </TouchableOpacity>
+);
 
 export default function DashboardScreen({ navigation }) {
   const { theme, isDarkMode } = useTheme();
   const s = styles(theme);
-  const { weeklyUsage, weeklyLabels } = dashboardData;
-  const maxUsage = Math.max(...weeklyUsage);
+
+  const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState('');
+  const [stats, setStats] = useState({
+    totalUsage: 0,
+    monthlyBill: 0,
+    dailyAvg: 0,
+    projectedBill: 0,
+    activeDevices: 0,
+    treesSaved: 0
+  });
+  
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
 
-  const [aiSuggestion, setAiSuggestion] = useState(dashboardData.aiSuggestion);
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const uid = await AsyncStorage.getItem('user_id');
+      const name = await AsyncStorage.getItem('user_name');
+      setUserName(name || '');
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
-    ]).start();
-
-    // Fetch real AI insights
-    const fetchInsights = async () => {
-      try {
-        const data = await EnergyAPI.getInsights(1); // Demo user ID
-        if (data && data.suggestion) {
-          setAiSuggestion(data.suggestion);
-        }
-      } catch (error) {
-        console.log('Using mock insights as fallback');
+      if (!uid) {
+        navigation.replace('Login');
+        return;
       }
-    };
-    fetchInsights();
-  }, []);
+
+      // 1. Merr faturat e përdoruesit specifik
+      const { data: bills } = await supabase
+        .from('bills')
+        .select('*')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false });
+
+      // 2. Merr pajisjet e përdoruesit specifik
+      const { data: devices } = await supabase
+        .from('devices')
+        .select('*')
+        .eq('user_id', uid);
+
+      // 3. Merr të dhënat e shtëpisë
+      const houseDataStr = await AsyncStorage.getItem('house_data');
+      const houseData = houseDataStr ? JSON.parse(houseDataStr) : null;
+      const budgetEuro = houseData ? parseInt(houseData.buxheti.replace(/[^0-9]/g, '')) : 50;
+      const targetKwh = Math.round(budgetEuro / 0.07) || 400;
+
+      let lastKwh = 0, lastAmount = 0;
+      if (bills && bills.length > 0) {
+        lastKwh = bills[0].kwh || 0;
+        lastAmount = bills[0].amount || 0;
+      }
+
+      setStats({
+        totalUsage: lastKwh,
+        monthlyBill: lastAmount,
+        dailyAvg: (lastKwh / 30).toFixed(1),
+        projectedBill: (lastAmount * 0.9).toFixed(2),
+        activeDevices: devices ? devices.length : 0,
+        treesSaved: Math.floor(lastKwh / 50),
+        targetKwh: targetKwh,
+        targetEuro: budgetEuro
+      });
+    } catch (e) {
+      console.log(e);
+    } finally {
+      setLoading(false);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }).start();
+    }
+  };
+
+  useEffect(() => { fetchData(); }, []);
 
   return (
-    <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
-      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
-      <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          <View style={s.headerTop}>
+    <View style={s.container}>
+      <StatusBar style="light" />
+      <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} tintColor="#fff" />}>
+        
+        <LinearGradient colors={['#059669', '#10B981', '#34D399']} style={s.hero} start={{x: 0, y: 0}} end={{x: 1, y: 1}}>
+          <SafeAreaSpacer />
+          <View style={s.headerRow}>
             <View>
-              <Text style={s.greeting}>Mirëmëngjes! 👋</Text>
-              <Text style={s.headerTitle}>EcoMind AI+</Text>
+              <Text style={s.heroGreeting}>Mirë se vini, {userName}! 👋</Text>
+              <Text style={s.heroBrand}>EcoMind AI+</Text>
             </View>
-            <TouchableOpacity 
-              style={s.notifBtn} 
-              onPress={() => navigation.navigate('More', { screen: 'Notifications' })}
-            >
-              <Ionicons name="notifications" size={22} color={theme.primary} />
-              <View style={s.notifDot} />
+            <TouchableOpacity style={s.profileBtn} onPress={() => navigation.navigate('More', { screen: 'Settings' })}>
+              <Ionicons name="settings-outline" size={28} color="#fff" />
             </TouchableOpacity>
           </View>
 
-          <LinearGradient colors={theme.gradientPrimary} style={s.heroCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-            <Text style={s.heroLabel}>Konsumi Mujor</Text>
-            <Text style={s.heroValue}>{dashboardData.totalUsage} <Text style={s.heroUnit}>kWh</Text></Text>
-            <View style={s.heroRow}>
+          <Animated.View style={[s.mainCard, { opacity: fadeAnim }]}>
+            <View style={s.cardTop}>
               <View>
-                <Text style={s.heroSubLabel}>Fatura Estimuar</Text>
-                <Text style={s.heroSub}>{dashboardData.monthlyBill}€</Text>
+                <Text style={s.cardLabel}>KONSUMI JUAJ</Text>
+                <Text style={s.cardValue}>{stats.totalUsage} <Text style={s.cardUnit}>kWh</Text></Text>
               </View>
-              <View>
-                <Text style={s.heroSubLabel}>Kursim</Text>
-                <Text style={s.heroSub}>+{dashboardData.savingsThisMonth}€</Text>
-              </View>
-              <View>
-                <Text style={s.heroSubLabel}>CO₂</Text>
-                <Text style={s.heroSub}>{dashboardData.co2Emissions}kg</Text>
+              <View style={s.cardBadge}>
+                <Ionicons name="leaf" size={14} color="#059669" />
+                <Text style={s.badgeText}>Eko-Llogari</Text>
               </View>
             </View>
-            <View style={s.ecoScoreRow}>
-              <Text style={s.ecoLabel}>Eco Score</Text>
-              <View style={s.ecoBar}>
-                <View style={[s.ecoFill, { width: `${dashboardData.ecoScore}%` }]} />
-              </View>
-              <Text style={s.ecoNum}>{dashboardData.ecoScore}</Text>
+            
+            <View style={s.progressBarBase}>
+              <LinearGradient colors={['#F59E0B', '#FCD34D']} style={[s.progressBarFill, { width: stats.totalUsage > stats.targetKwh ? '100%' : `${(stats.totalUsage / stats.targetKwh) * 100}%` }]} />
             </View>
-          </LinearGradient>
-        </Animated.View>
-      </LinearGradient>
+            <View style={s.progressLabels}>
+              <Text style={s.progressLabelText}>Synimi: {stats.targetKwh} kWh ({stats.targetEuro}€)</Text>
+              <Text style={s.progressLabelText}>{Math.min(100, Math.round((stats.totalUsage / stats.targetKwh) * 100))}%</Text>
+            </View>
+          </Animated.View>
+        </LinearGradient>
 
-      <View style={s.section}>
-        <Text style={s.sectionTitle}>Statistikat</Text>
-        <View style={s.statGrid}>
-          <StatCard title="Konsumi" value={dashboardData.totalUsage} unit="kWh" icon="flash" gradient={['#00C896','#00A87A']} theme={theme} />
-          <StatCard title="Fatura" value={dashboardData.monthlyBill} unit="€" icon="card" gradient={['#1A73E8','#1557B0']} theme={theme} />
-          <StatCard title="CO₂" value={dashboardData.co2Emissions} unit="kg" gradient={['#7C3AED','#5B21B6']} icon="leaf" theme={theme} />
-          <StatCard title="Kursim" value={dashboardData.savingsThisMonth} unit="€" icon="trending-down" gradient={['#F59E0B','#D97706']} theme={theme} />
-        </View>
-      </View>
+        <View style={s.body}>
+          <View style={s.actionsRow}>
+            <QuickAction icon="scan-outline" label="Skano" color="#3B82F6" onPress={() => navigation.navigate('Bills')} theme={theme} />
+            <QuickAction icon="add-outline" label="Pajisjet" color="#10B981" onPress={() => navigation.navigate('Devices')} theme={theme} />
+            <QuickAction icon="stats-chart-outline" label="Analitika" color="#8B5CF6" onPress={() => navigation.navigate('Analytics')} theme={theme} />
+            <QuickAction icon="bulb-outline" label="AI Këshilla" color="#F59E0B" onPress={() => navigation.navigate('AI')} theme={theme} />
+          </View>
 
-      <View style={s.section}>
-        <Text style={s.sectionTitle}>Konsumi Javor</Text>
-        <View style={s.chartCard}>
-          {weeklyUsage.map((val, i) => (
-            <View key={i} style={s.barCol}>
-              <Text style={s.barValue}>{val}</Text>
-              <View style={s.barContainer}>
-                <View style={[s.barItem, {
-                  height: (val / maxUsage) * 80,
-                  backgroundColor: i === 3 ? theme.danger : theme.primary,
-                }]} />
-              </View>
-              <Text style={s.barLabel}>{weeklyLabels[i]}</Text>
+          <Text style={s.sectionTitle}>Të dhënat tuaja</Text>
+          <View style={s.statsGrid}>
+            <View style={s.statBox}>
+              <Ionicons name="wallet-outline" size={20} color={theme.primary} />
+              <Text style={s.statVal}>{stats.monthlyBill} €</Text>
+              <Text style={s.statLbl}>Fatura fundit</Text>
             </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={s.section}>
-        <Text style={s.sectionTitle}>Pajisja më Harxhuese</Text>
-        <LinearGradient colors={theme.gradientCard} style={s.consumerCard}>
-          <View style={s.consumerRow}>
-            <View style={s.consumerIcon}>
-              <Ionicons name="snow" size={28} color={theme.secondary} />
-            </View>
-            <View style={s.consumerInfo}>
-              <Text style={s.consumerName}>{dashboardData.topConsumer}</Text>
-              <Text style={s.consumerSub}>12 kWh/ditë • 35% e konsumit total</Text>
-              <MiniBar value={35} max={100} color={theme.secondary} theme={theme} />
+            <View style={s.statBox}>
+              <Ionicons name="apps-outline" size={20} color="#10B981" />
+              <Text style={s.statVal}>{stats.activeDevices}</Text>
+              <Text style={s.statLbl}>Pajisje total</Text>
             </View>
           </View>
-        </LinearGradient>
-      </View>
 
-      <View style={[s.section, { marginBottom: 100 }]}>
-        <Text style={s.sectionTitle}>Sugjerim AI</Text>
-        <LinearGradient colors={theme.gradientPrimary} style={s.aiCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-          <Ionicons name="bulb" size={24} color="#fff" style={{ marginRight: 12 }} />
-          <Text style={s.aiText}>{aiSuggestion}</Text>
-        </LinearGradient>
-      </View>
-    </ScrollView>
+          <LinearGradient colors={['#1E293B', '#0F172A']} style={s.impactCard}>
+            <View style={s.impactInfo}>
+              <Text style={s.impactTitle}>Impakti i Llogarisë</Text>
+              <Text style={s.impactDesc}>Secili përdorues kontribuon në kursimin global.</Text>
+              <View style={s.treeRow}>
+                <Ionicons name="leaf" size={24} color="#10B981" />
+                <Text style={s.treeCount}>{stats.treesSaved} Pemë të Kursyera</Text>
+              </View>
+            </View>
+            <Ionicons name="earth" size={80} color="rgba(255,255,255,0.05)" style={s.earthIcon} />
+          </LinearGradient>
+
+          <View style={{ height: 120 }} />
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
+const SafeAreaSpacer = () => <View style={{ height: Platform.OS === 'ios' ? 50 : 30 }} />;
+
 const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
-  header: { paddingTop: 55, paddingHorizontal: 20, paddingBottom: 24 },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  greeting: { color: theme.textSecondary, fontSize: 14 },
-  headerTitle: { color: theme.textPrimary, fontSize: 26, fontWeight: '800' },
-  notifBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: theme.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.border },
-  notifDot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: theme.danger },
-  heroCard: { borderRadius: 24, padding: 20, shadowColor: theme.primary, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
-  heroLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 13 },
-  heroValue: { color: '#fff', fontSize: 48, fontWeight: '900', marginVertical: 4 },
-  heroUnit: { fontSize: 20, fontWeight: '400' },
-  heroRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, marginBottom: 16 },
-  heroSubLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11 },
-  heroSub: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  ecoScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  ecoLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 12, width: 70 },
-  ecoBar: { flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 3 },
-  ecoFill: { height: 6, backgroundColor: '#fff', borderRadius: 3 },
-  ecoNum: { color: '#fff', fontSize: 14, fontWeight: '700', width: 28, textAlign: 'right' },
-  section: { paddingHorizontal: 20, marginTop: 24 },
-  sectionTitle: { color: theme.textPrimary, fontSize: 17, fontWeight: '700', marginBottom: 14 },
-  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  statCard: { width: (width - 52) / 2, borderRadius: 18, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
-  statGradient: { padding: 16 },
-  statIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  statValue: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  statUnit: { fontSize: 13, fontWeight: '400' },
-  statTitle: { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 4 },
-  chartCard: { backgroundColor: theme.card, borderRadius: 18, padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', borderWidth: 1, borderColor: theme.border },
-  barCol: { alignItems: 'center', flex: 1 },
-  barValue: { color: theme.textSecondary, fontSize: 9, marginBottom: 4 },
-  barContainer: { height: 90, justifyContent: 'flex-end' },
-  barItem: { width: 10, borderRadius: 5, minHeight: 6 },
-  barLabel: { color: theme.textSecondary, fontSize: 10, marginTop: 6 },
-  consumerCard: { borderRadius: 18, padding: 16, borderWidth: 1, borderColor: theme.border },
-  consumerRow: { flexDirection: 'row', alignItems: 'center' },
-  consumerIcon: { width: 56, height: 56, borderRadius: 16, backgroundColor: 'rgba(26,115,232,0.1)', alignItems: 'center', justifyContent: 'center', marginRight: 14 },
-  consumerInfo: { flex: 1 },
-  consumerName: { color: theme.textPrimary, fontSize: 16, fontWeight: '700' },
-  consumerSub: { color: theme.textSecondary, fontSize: 12, marginTop: 2, marginBottom: 8 },
-  barBg: { height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden' },
-  barFill: { height: 4, borderRadius: 2 },
-  aiCard: { borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10 },
-  aiText: { color: '#fff', fontSize: 14, fontWeight: '600', flex: 1, lineHeight: 20 },
+  hero: { paddingHorizontal: 24, paddingBottom: 40, borderBottomLeftRadius: 40, borderBottomRightRadius: 40 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
+  heroGreeting: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '600' },
+  heroBrand: { color: '#fff', fontSize: 26, fontWeight: '900' },
+  profileBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  mainCard: { backgroundColor: theme.card, borderRadius: 30, padding: 25, elevation: 15, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20 },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  cardLabel: { color: theme.textSecondary, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  cardValue: { color: theme.textPrimary, fontSize: 38, fontWeight: '900', marginTop: 5 },
+  cardUnit: { fontSize: 18, fontWeight: '600' },
+  cardBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#10B98115', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  badgeText: { color: '#059669', fontSize: 11, fontWeight: '700' },
+  progressBarBase: { height: 10, backgroundColor: theme.border, borderRadius: 5, overflow: 'hidden' },
+  progressBarFill: { height: '100%', borderRadius: 5 },
+  progressLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  progressLabelText: { color: theme.textMuted, fontSize: 11, fontWeight: '600' },
+  body: { paddingHorizontal: 24, marginTop: 25 },
+  actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 30 },
+  actionCard: { alignItems: 'center', flex: 1 },
+  actionIcon: { width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  actionLabel: { color: theme.textPrimary, fontSize: 12, fontWeight: '700' },
+  sectionTitle: { color: theme.textPrimary, fontSize: 18, fontWeight: '800', marginBottom: 15 },
+  statsGrid: { flexDirection: 'row', gap: 15, marginBottom: 25 },
+  statBox: { flex: 1, backgroundColor: theme.card, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: theme.border },
+  statVal: { color: theme.textPrimary, fontSize: 20, fontWeight: '900', marginVertical: 4 },
+  statLbl: { color: theme.textSecondary, fontSize: 11, fontWeight: '600' },
+  impactCard: { borderRadius: 28, padding: 25, position: 'relative', overflow: 'hidden', marginBottom: 30 },
+  impactTitle: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 8 },
+  impactDesc: { color: 'rgba(255,255,255,0.7)', fontSize: 12, lineHeight: 18, marginBottom: 15 },
+  treeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  treeCount: { color: '#10B981', fontSize: 16, fontWeight: '800' },
+  earthIcon: { position: 'absolute', right: -20, bottom: -20 },
 });

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Alert, TextInput, Modal } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Alert, TextInput, Modal, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
+import { supabase } from '../data/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SettingRow = ({ icon, label, sub, value, onToggle, onPress, type = 'arrow', color, theme }) => (
   <TouchableOpacity onPress={onPress} style={styles(theme).settingRow} activeOpacity={0.7}>
@@ -30,30 +32,83 @@ export default function SettingsScreen({ navigation }) {
   const { theme, isDarkMode, toggleTheme } = useTheme();
   const s = styles(theme);
 
+  const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState(true);
   const [userData, setUserData] = useState({
-    emri: 'Arben Kelmendi',
-    email: 'arben@ecomind.ks',
-    banimi: 'Apartament — 85m²',
-    personat: '4 persona',
-    buxheti: '60€'
+    emri: '...',
+    email: '...',
+    banimi: 'Papërcaktuar',
+    personat: '1 person',
+    buxheti: '50€'
   });
 
   const [editModal, setEditModal] = useState(false);
-  const [editType, setEditType] = useState('profil'); // 'profil' ose 'shtepi'
+  const [editType, setEditType] = useState('profil');
   const [formData, setFormData] = useState({ ...userData });
 
-  const hapEditimin = (type) => {
-    setEditType(type);
-    setFormData({ ...userData });
-    setEditModal(true);
+  useEffect(() => {
+    const loadProfile = async () => {
+      const uid = await AsyncStorage.getItem('user_id');
+      if (!uid) {
+        navigation.replace('Login');
+        return;
+      }
+
+      // 1. Merr të dhënat e regjistrimit nga Supabase
+      const { data: user } = await supabase.from('users').select('*').eq('id', uid).single();
+      
+      // 2. Merr të dhënat e shtëpisë (nga AsyncStorage ose Supabase)
+      const houseData = await AsyncStorage.getItem('house_data');
+      const parsedHouse = houseData ? JSON.parse(houseData) : null;
+
+      if (user) {
+        setUserData({
+          emri: user.full_name || 'Pa emër',
+          email: user.email || 'Pa email',
+          banimi: parsedHouse?.banimi || 'Apartament — 85m²',
+          personat: parsedHouse?.personat || '4 persona',
+          buxheti: parsedHouse?.buxheti || '60€'
+        });
+      }
+      setLoading(false);
+    };
+    loadProfile();
+  }, []);
+
+  const ruajNdryshimet = async () => {
+    setLoading(true);
+    try {
+      if (editType === 'profil') {
+        const uid = await AsyncStorage.getItem('user_id');
+        await supabase.from('users').update({ full_name: formData.emri }).eq('id', uid);
+        await AsyncStorage.setItem('user_name', formData.emri);
+      } else {
+        // Ruajmë të dhënat e shtëpisë
+        const houseData = { 
+          banimi: formData.banimi, 
+          personat: formData.personat, 
+          buxheti: formData.buxheti 
+        };
+        await AsyncStorage.setItem('house_data', JSON.stringify(houseData));
+      }
+      setUserData({ ...formData });
+      setEditModal(false);
+      Alert.alert('Sukses', 'Të dhënat u ruajtën!');
+    } catch (e) {
+      Alert.alert('Gabim', 'Dështoi ruajtja.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const ruajNdryshimet = () => {
-    setUserData({ ...formData });
-    setEditModal(false);
-    Alert.alert('Sukses', 'Të dhënat u përditësuan me sukses!');
+  const logout = async () => {
+    await AsyncStorage.clear();
+    navigation.replace('Login');
   };
+
+  if (loading && userData.emri === '...') {
+    return <View style={[s.container, {justifyContent:'center'}]}><ActivityIndicator color={theme.primary} /></View>;
+  }
 
   return (
     <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
@@ -62,17 +117,13 @@ export default function SettingsScreen({ navigation }) {
 
         <LinearGradient colors={theme.gradientPrimary} style={s.profileCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
           <View style={s.avatar}>
-            <Text style={s.avatarText}>{userData.emri.charAt(0)}</Text>
+            <Text style={s.avatarText}>{userData.emri.charAt(0).toUpperCase()}</Text>
           </View>
           <View style={s.profileInfo}>
             <Text style={s.profileName}>{userData.emri}</Text>
             <Text style={s.profileEmail}>{userData.email}</Text>
-            <View style={s.planBadge}>
-              <Ionicons name="diamond" size={12} color="#F59E0B" />
-              <Text style={s.planText}>Anëtar Premium</Text>
-            </View>
           </View>
-          <TouchableOpacity style={s.editBtn} onPress={() => hapEditimin('profil')}>
+          <TouchableOpacity style={s.editBtn} onPress={() => { setEditType('profil'); setFormData({...userData}); setEditModal(true); }}>
             <Ionicons name="pencil" size={16} color="#fff" />
           </TouchableOpacity>
         </LinearGradient>
@@ -82,14 +133,14 @@ export default function SettingsScreen({ navigation }) {
         <View style={s.section}>
           <View style={s.sectionHeader}>
             <Text style={s.sectionTitle}>🏠 Shtëpia Ime</Text>
-            <TouchableOpacity onPress={() => hapEditimin('shtepi')}>
+            <TouchableOpacity onPress={() => { setEditType('shtepi'); setFormData({...userData}); setEditModal(true); }}>
               <Text style={s.editLink}>Ndrysho</Text>
             </TouchableOpacity>
           </View>
           <View style={s.card}>
-            <SettingRow icon="people" label="Madhësia e Familjes" sub={userData.personat} color={theme.primary} theme={theme} />
-            <SettingRow icon="home" label="Lloji i Shtëpisë" sub={userData.banimi} color={theme.info} theme={theme} />
-            <SettingRow icon="cash" label="Buxheti Mujor" sub={userData.buxheti + " / muaj"} color={theme.warning} theme={theme} />
+            <SettingRow icon="home" label="Lloji & Madhësia" sub={userData.banimi} color={theme.info} theme={theme} />
+            <SettingRow icon="people" label="Familja" sub={userData.personat} color={theme.primary} theme={theme} />
+            <SettingRow icon="cash" label="Buxheti i Synuar" sub={userData.buxheti} color={theme.warning} theme={theme} />
           </View>
         </View>
 
@@ -98,65 +149,36 @@ export default function SettingsScreen({ navigation }) {
           <View style={s.card}>
             <SettingRow icon="moon" label="Mënyra e Errët" type="toggle" value={isDarkMode} onToggle={toggleTheme} color={theme.accent3} theme={theme} />
             <SettingRow icon="notifications" label="Njoftimet" type="toggle" value={notifications} onToggle={setNotifications} color={theme.primary} theme={theme} />
-            <SettingRow icon="language" label="Gjuha" sub="Shqip" color={theme.success} theme={theme} />
           </View>
         </View>
 
-        <TouchableOpacity onPress={() => navigation.replace('Login')} style={s.logoutBtn}>
-          <LinearGradient colors={['#EF4444', '#DC2626']} style={s.logoutInner} start={{x:0,y:0}} end={{x:1,y:0}}>
-            <Ionicons name="log-out" size={20} color="#fff" />
-            <Text style={s.logoutText}>Dil nga Aplikacioni</Text>
-          </LinearGradient>
+        <TouchableOpacity style={s.logoutBtn} onPress={logout}>
+          <Ionicons name="log-out" size={20} color="#EF4444" />
+          <Text style={s.logoutText}>Shkyçu</Text>
         </TouchableOpacity>
 
-        <Text style={s.version}>EcoMind AI+ Kosovo v1.0.0</Text>
-        <View style={{ height: 100 }} />
+        <View style={{ height: 120 }} />
       </View>
 
-      {/* Modal për Editim */}
-      <Modal visible={editModal} transparent animationType="slide">
+      <Modal visible={editModal} transparent animationType="fade">
         <View style={s.modalOverlay}>
           <View style={s.modalContent}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>{editType === 'profil' ? 'Edito Profilin' : 'Edito Shtëpinë'}</Text>
-              <TouchableOpacity onPress={() => setEditModal(false)}>
-                <Ionicons name="close" size={24} color={theme.textPrimary} />
-              </TouchableOpacity>
-            </View>
+            <Text style={s.modalTitle}>{editType === 'profil' ? 'Edito Profilin' : 'Të dhënat e Shtëpisë'}</Text>
             
             {editType === 'profil' ? (
-              <>
-                <View style={s.inputGroup}>
-                  <Text style={s.label}>Emri i Plotë</Text>
-                  <TextInput style={s.input} value={formData.emri} onChangeText={(t) => setFormData({...formData, emri: t})} />
-                </View>
-                <View style={s.inputGroup}>
-                  <Text style={s.label}>Email Adresa</Text>
-                  <TextInput style={s.input} value={formData.email} onChangeText={(t) => setFormData({...formData, email: t})} keyboardType="email-address" />
-                </View>
-              </>
+              <TextInput style={s.input} value={formData.emri} onChangeText={(v) => setFormData({...formData, emri: v})} placeholder="Emri i Plotë" placeholderTextColor={theme.textMuted} />
             ) : (
               <>
-                <View style={s.inputGroup}>
-                  <Text style={s.label}>Lloji i Shtëpisë</Text>
-                  <TextInput style={s.input} value={formData.banimi} onChangeText={(t) => setFormData({...formData, banimi: t})} />
-                </View>
-                <View style={s.inputGroup}>
-                  <Text style={s.label}>Madhësia e Familjes</Text>
-                  <TextInput style={s.input} value={formData.personat} onChangeText={(t) => setFormData({...formData, personat: t})} />
-                </View>
-                <View style={s.inputGroup}>
-                  <Text style={s.label}>Buxheti (p.sh. 60€)</Text>
-                  <TextInput style={s.input} value={formData.buxheti} onChangeText={(t) => setFormData({...formData, buxheti: t})} />
-                </View>
+                <TextInput style={s.input} value={formData.banimi} onChangeText={(v) => setFormData({...formData, banimi: v})} placeholder="Lloji (Shtëpi/Apartament)" placeholderTextColor={theme.textMuted} />
+                <TextInput style={s.input} value={formData.personat} onChangeText={(v) => setFormData({...formData, personat: v})} placeholder="Sa persona jeni?" placeholderTextColor={theme.textMuted} />
+                <TextInput style={s.input} value={formData.buxheti} onChangeText={(v) => setFormData({...formData, buxheti: v})} placeholder="Buxheti mujor (€)" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
               </>
             )}
 
-            <TouchableOpacity style={s.saveBtn} onPress={ruajNdryshimet}>
-              <LinearGradient colors={theme.gradientPrimary} style={s.saveBtnInner}>
-                <Text style={s.saveBtnText}>Ruaj Ndryshimet</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+            <View style={s.modalActions}>
+              <TouchableOpacity style={[s.modalBtn, {backgroundColor: theme.border}]} onPress={() => setEditModal(false)}><Text style={{color: theme.textPrimary}}>Anulo</Text></TouchableOpacity>
+              <TouchableOpacity style={[s.modalBtn, {backgroundColor: theme.primary}]} onPress={ruajNdryshimet}><Text style={{color: '#fff'}}>Ruaj</Text></TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -166,41 +188,32 @@ export default function SettingsScreen({ navigation }) {
 
 const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
-  header: { paddingTop: 55, paddingHorizontal: 20, paddingBottom: 24 },
-  headerTitle: { color: theme.textPrimary, fontSize: 26, fontWeight: '800', marginBottom: 16 },
-  profileCard: { borderRadius: 24, padding: 20, flexDirection: 'row', alignItems: 'center' },
-  avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-  avatarText: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  profileInfo: { flex: 1 },
+  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 30 },
+  headerTitle: { color: theme.textPrimary, fontSize: 24, fontWeight: '800', marginBottom: 25 },
+  profileCard: { borderRadius: 28, padding: 25, flexDirection: 'row', alignItems: 'center', position: 'relative' },
+  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
+  avatarText: { color: '#fff', fontSize: 24, fontWeight: '800' },
+  profileInfo: { marginLeft: 18, flex: 1 },
   profileName: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  profileEmail: { color: 'rgba(255,255,255,0.75)', fontSize: 13 },
-  planBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
-  planText: { color: '#F59E0B', fontSize: 12, fontWeight: '700' },
-  editBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  body: { padding: 20 },
-  section: { marginBottom: 24 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  sectionTitle: { color: theme.textPrimary, fontSize: 17, fontWeight: '800' },
-  editLink: { color: theme.primary, fontSize: 14, fontWeight: '700' },
-  card: { backgroundColor: theme.card, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: theme.border },
-  settingRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
-  settingIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  profileEmail: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4 },
+  editBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  body: { padding: 24 },
+  section: { marginBottom: 30 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  sectionTitle: { color: theme.textPrimary, fontSize: 16, fontWeight: '700' },
+  editLink: { color: theme.primary, fontSize: 13, fontWeight: '700' },
+  card: { backgroundColor: theme.card, borderRadius: 24, paddingVertical: 10, borderWidth: 1, borderColor: theme.border },
+  settingRow: { flexDirection: 'row', alignItems: 'center', padding: 15 },
+  settingIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 15 },
   settingInfo: { flex: 1 },
-  settingLabel: { color: theme.textPrimary, fontSize: 15, fontWeight: '600' },
-  settingSub: { color: theme.textSecondary, fontSize: 12, marginTop: 2 },
-  logoutBtn: { borderRadius: 18, overflow: 'hidden', marginTop: 10 },
-  logoutInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, gap: 10 },
-  logoutText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  version: { color: theme.textMuted, fontSize: 12, textAlign: 'center', marginTop: 24 },
-  
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalTitle: { color: theme.textPrimary, fontSize: 20, fontWeight: '800' },
-  inputGroup: { marginBottom: 20 },
-  label: { color: theme.textPrimary, fontSize: 14, fontWeight: '700', marginBottom: 10 },
-  input: { backgroundColor: theme.background, borderRadius: 16, padding: 16, color: theme.textPrimary, fontSize: 16, borderWidth: 1, borderColor: theme.border },
-  saveBtn: { borderRadius: 18, overflow: 'hidden', marginTop: 10 },
-  saveBtnInner: { padding: 18, alignItems: 'center' },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  settingLabel: { color: theme.textPrimary, fontSize: 14, fontWeight: '600' },
+  settingSub: { color: theme.textSecondary, fontSize: 11, marginTop: 2 },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 20, padding: 15, borderRadius: 15, borderWidth: 1, borderColor: '#EF444420' },
+  logoutText: { color: '#EF4444', fontSize: 15, fontWeight: '700' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 },
+  modalContent: { backgroundColor: theme.card, borderRadius: 24, padding: 25 },
+  modalTitle: { color: theme.textPrimary, fontSize: 18, fontWeight: '800', marginBottom: 20 },
+  input: { backgroundColor: theme.background, borderRadius: 12, padding: 14, color: theme.textPrimary, marginBottom: 15, borderWidth: 1, borderColor: theme.border },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 10 },
+  modalBtn: { flex: 1, padding: 15, borderRadius: 12, alignItems: 'center' },
 });

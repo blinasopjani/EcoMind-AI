@@ -1,124 +1,198 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Animated, PanResponder, Dimensions } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Animated, Dimensions, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { supabase } from '../data/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
-const SLIDER_W = width - 80;
 
 export default function SimulatorScreen() {
+  const { theme, isDarkMode } = useTheme();
+  const navigation = useNavigation();
+  const s = styles(theme);
+
   const [reduction, setReduction] = useState(20);
-  const currentBill = 47.8;
+  const [currentBill, setCurrentBill] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [hasBills, setHasBills] = useState(false);
+
   const moneySaved = ((currentBill * reduction) / 100).toFixed(1);
   const newBill = (currentBill - moneySaved).toFixed(1);
   const co2Reduced = (reduction * 1.56).toFixed(0);
   const yearlyProjection = (moneySaved * 12).toFixed(0);
 
-  const progress = useRef(new Animated.Value(reduction / 100)).current;
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const uid = await AsyncStorage.getItem('user_id');
+      const { data: bills } = await supabase
+        .from('bills')
+        .select('amount')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false });
+
+      if (bills && bills.length > 0) {
+        setHasBills(true);
+        // Përdorim mesataren e faturave për "të dhëna reale" më të sakta, ose të fundit
+        // Për thjeshtësi dhe saktësi momentale, përdorim të fundit por informojmë përdoruesin
+        setCurrentBill(bills[0].amount);
+      } else {
+        setHasBills(false);
+        setCurrentBill(0);
+      }
+    } catch (err) {
+      console.error(err);
+      setHasBills(false);
+    } finally {
+      setLoading(false);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    }
+  };
 
   const handleSlider = (val) => {
-    const clamped = Math.max(5, Math.min(60, val));
-    setReduction(clamped);
+    setReduction(val);
   };
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    fetchData();
   }, []);
 
+  if (loading) {
+    return (
+      <View style={[s.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
+
+  if (!hasBills) {
+    return (
+      <View style={s.container}>
+      <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
+        <View style={s.headerRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
+          </TouchableOpacity>
+          <View>
+            <Text style={s.headerTitle}>Simuluesi</Text>
+            <Text style={s.headerSub}>Kërkohen të dhëna reale</Text>
+          </View>
+        </View>
+      </LinearGradient>
+        <View style={[s.body, { flex: 1, justifyContent: 'center', alignItems: 'center' }]}>
+          <View style={s.emptyCard}>
+            <View style={s.emptyIconBox}>
+              <Ionicons name="receipt-outline" size={50} color={theme.primary} />
+            </View>
+            <Text style={s.emptyTitle}>Asnjë faturë nuk u gjet</Text>
+            <Text style={s.emptyDesc}>Për të përdorur simuluesin me të dhëna reale, duhet të keni të paktën një faturë të skanuar në llogarinë tuaj.</Text>
+            <TouchableOpacity 
+              style={s.scanBtn} 
+              onPress={() => navigation.navigate('Bills')}
+            >
+              <Text style={s.scanBtnText}>Skano Faturën Tani</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <LinearGradient colors={['#0A0F1E', '#111827']} style={styles.header}>
-        <Text style={styles.headerTitle}>Simuluesi</Text>
-        <Text style={styles.headerSub}>Shih sa do të kursesh para kohe</Text>
+    <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
+      <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
+        <View style={s.headerRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
+          </TouchableOpacity>
+          <View>
+            <Text style={s.headerTitle}>Simuluesi</Text>
+            <Text style={s.headerSub}>Duke përdorur të dhënat nga fatura juaj e fundit ({currentBill}€)</Text>
+          </View>
+        </View>
       </LinearGradient>
 
-      <View style={styles.body}>
-        {/* Slider Card */}
-        <View style={styles.sliderCard}>
-          <Text style={styles.sliderTitle}>Sa dëshironi të reduktoni konsumin?</Text>
-          <Text style={styles.sliderValue}>{reduction}%</Text>
+      <View style={s.body}>
+        <View style={s.sliderCard}>
+          <Text style={s.sliderTitle}>Sa dëshironi të reduktoni konsumin?</Text>
+          <Text style={s.sliderValue}>{reduction}%</Text>
 
-          {/* Custom Slider */}
-          <View style={styles.sliderTrack}>
-            <View style={[styles.sliderFill, { width: `${(reduction / 60) * 100}%` }]} />
+          <View style={s.sliderTrack}>
+            <View style={[s.sliderFill, { width: `${(reduction / 60) * 100}%` }]} />
           </View>
 
-          <View style={styles.sliderBtns}>
-            {[10, 20, 30, 40, 50].map(v => (
-              <View key={v}
-                onStartShouldSetResponder={() => true}
-                onResponderRelease={() => handleSlider(v)}
-                style={[styles.sliderBtn, reduction === v && styles.sliderBtnActive]}>
-                <Text style={[styles.sliderBtnText, reduction === v && styles.sliderBtnTextActive]}>{v}%</Text>
-              </View>
+          <View style={s.sliderBtns}>
+            {[10, 20, 30, 40, 50, 60].map(v => (
+              <TouchableOpacity key={v}
+                onPress={() => handleSlider(v)}
+                style={[s.sliderBtn, reduction === v && s.sliderBtnActive]}>
+                <Text style={[s.sliderBtnText, reduction === v && s.sliderBtnTextActive]}>{v}%</Text>
+              </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Results */}
         <Animated.View style={{ opacity: fadeAnim }}>
-          {/* Bill Comparison */}
-          <View style={styles.billCompare}>
-            <View style={styles.billBox}>
-              <Text style={styles.billBoxLabel}>Fatura Aktuale</Text>
-              <Text style={[styles.billBoxVal, { color: Colors.danger }]}>{currentBill}€</Text>
+          <View style={s.billCompare}>
+            <View style={s.billBox}>
+              <Text style={s.billBoxLabel}>Fatura Aktuale</Text>
+              <Text style={[s.billBoxVal, { color: '#EF4444' }]}>{currentBill}€</Text>
             </View>
-            <View style={styles.billArrow}>
-              <Ionicons name="arrow-forward" size={24} color={Colors.primary} />
+            <View style={s.billArrow}>
+              <Ionicons name="arrow-forward" size={24} color={theme.primary} />
             </View>
-            <LinearGradient colors={['#00C896','#00A87A']} style={styles.billBoxNew}>
-              <Text style={styles.billBoxLabelNew}>Fatura e Re</Text>
-              <Text style={styles.billBoxValNew}>{newBill}€</Text>
+            <LinearGradient colors={['#00C896','#00A87A']} style={s.billBoxNew}>
+              <Text style={s.billBoxLabelNew}>Fatura e Re</Text>
+              <Text style={s.billBoxValNew}>{newBill}€</Text>
             </LinearGradient>
           </View>
 
-          {/* Stat Cards */}
-          <View style={styles.resultGrid}>
-            <LinearGradient colors={['#00C896','#00A87A']} style={styles.resultCard}>
-              <Ionicons name="cash" size={24} color="#fff" />
-              <Text style={styles.resultVal}>{moneySaved}€</Text>
-              <Text style={styles.resultLabel}>Kursim/muaj</Text>
+          <View style={s.resultGrid}>
+            <LinearGradient colors={['#00C896','#00A87A']} style={s.resultCard}>
+              <Ionicons name="cash" size={20} color="#fff" />
+              <Text style={s.resultVal}>{moneySaved}€</Text>
+              <Text style={s.resultLabel}>Kursim/muaj</Text>
             </LinearGradient>
-            <LinearGradient colors={['#1A73E8','#1557B0']} style={styles.resultCard}>
-              <Ionicons name="leaf" size={24} color="#fff" />
-              <Text style={styles.resultVal}>{co2Reduced}kg</Text>
-              <Text style={styles.resultLabel}>CO₂ Reduktuar</Text>
+            <LinearGradient colors={['#1A73E8','#1557B0']} style={s.resultCard}>
+              <Ionicons name="leaf" size={20} color="#fff" />
+              <Text style={s.resultVal}>{co2Reduced}kg</Text>
+              <Text style={s.resultLabel}>CO₂ Reduktuar</Text>
             </LinearGradient>
-            <LinearGradient colors={['#7C3AED','#5B21B6']} style={styles.resultCard}>
-              <Ionicons name="trending-up" size={24} color="#fff" />
-              <Text style={styles.resultVal}>{yearlyProjection}€</Text>
-              <Text style={styles.resultLabel}>Kursim Vjetor</Text>
+            <LinearGradient colors={['#7C3AED','#5B21B6']} style={s.resultCard}>
+              <Ionicons name="trending-up" size={20} color="#fff" />
+              <Text style={s.resultVal}>{yearlyProjection}€</Text>
+              <Text style={s.resultLabel}>Kursim Vjetor</Text>
             </LinearGradient>
           </View>
 
-          {/* AI Tips for Reduction */}
-          <View style={styles.tipsCard}>
-            <Text style={styles.tipsTitle}>🤖 Si ta arrish {reduction}% reduktim?</Text>
+          <View style={s.tipsCard}>
+            <Text style={s.tipsTitle}>🤖 Si ta arrish {reduction}% reduktim?</Text>
             {[
-              `Fikni AC 30 min para gjumit → kurseni 3€/javë`,
-              `Aktivizoni "Eco Mode" në frigorifer → kurseni 1.5€/muaj`,
-              `Zëvendësoni drita me LED → kurseni 0.8€/muaj`,
-              `Shfrytëzoni lavanderinë natën → tarifa më e ulët`,
+              `Fikni pajisjet në "Standby" kur nuk i përdorni.`,
+              `Përdorni dritën natyrale sa më shumë gjatë ditës.`,
+              `Lani rrobat me ujë të ftohtë (30°C).`,
+              `Shkurtoni kohën e dushit me ujë të ngrohtë.`,
             ].slice(0, reduction > 30 ? 4 : 2).map((tip, i) => (
-              <View key={i} style={styles.tip}>
-                <View style={styles.tipDot} />
-                <Text style={styles.tipText}>{tip}</Text>
+              <View key={i} style={s.tip}>
+                <View style={s.tipDot} />
+                <Text style={s.tipText}>{tip}</Text>
               </View>
             ))}
           </View>
 
-          {/* Forecast Message */}
-          <LinearGradient colors={['rgba(0,200,150,0.1)','rgba(26,115,232,0.1)']} style={styles.forecastCard}>
-            <Text style={styles.forecastIcon}>📊</Text>
+          <LinearGradient colors={isDarkMode ? ['rgba(0,200,150,0.1)','rgba(26,115,232,0.05)'] : ['#fff', '#f0f9ff']} style={s.forecastCard}>
+            <Text style={s.forecastIcon}>📊</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.forecastTitle}>Parashikimi AI</Text>
-              <Text style={styles.forecastMsg}>
-                Nëse reduktoni {reduction}% — fatura e muajit tjetër pritet të jetë{' '}
-                <Text style={{ color: Colors.primary, fontWeight: '800' }}>{newBill}€</Text>
-                {' '}dhe do të kurseni{' '}
-                <Text style={{ color: Colors.warning, fontWeight: '800' }}>{yearlyProjection}€/vit</Text>.
+              <Text style={s.forecastTitle}>Parashikimi AI</Text>
+              <Text style={s.forecastMsg}>
+                Duke u bazuar në shpenzimet tuaja, nëse reduktoni {reduction}% — do të kurseni{' '}
+                <Text style={{ color: theme.primary, fontWeight: '800' }}>{yearlyProjection}€</Text> brenda një viti.
               </Text>
             </View>
           </LinearGradient>
@@ -130,41 +204,49 @@ export default function SimulatorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const styles = (theme) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   header: { paddingTop: 55, paddingHorizontal: 20, paddingBottom: 24 },
-  headerTitle: { color: Colors.textPrimary, fontSize: 26, fontWeight: '800' },
-  headerSub: { color: Colors.textSecondary, fontSize: 14 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.border },
+  headerTitle: { color: theme.textPrimary, fontSize: 26, fontWeight: '800' },
+  headerSub: { color: theme.textSecondary, fontSize: 14 },
   body: { padding: 20 },
-  sliderCard: { backgroundColor: Colors.card, borderRadius: 20, padding: 20, marginBottom: 20, alignItems: 'center' },
-  sliderTitle: { color: Colors.textSecondary, fontSize: 14, textAlign: 'center', marginBottom: 12 },
-  sliderValue: { color: Colors.primary, fontSize: 56, fontWeight: '900', marginBottom: 16 },
-  sliderTrack: { width: '100%', height: 8, backgroundColor: Colors.border, borderRadius: 4, overflow: 'hidden', marginBottom: 20 },
-  sliderFill: { height: 8, backgroundColor: Colors.primary, borderRadius: 4 },
-  sliderBtns: { flexDirection: 'row', gap: 8 },
-  sliderBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
-  sliderBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  sliderBtnText: { color: Colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  sliderCard: { backgroundColor: theme.card, borderRadius: 24, padding: 20, marginBottom: 20, alignItems: 'center', borderWidth: 1, borderColor: theme.border },
+  sliderTitle: { color: theme.textSecondary, fontSize: 13, textAlign: 'center', marginBottom: 12 },
+  sliderValue: { color: theme.primary, fontSize: 50, fontWeight: '900', marginBottom: 16 },
+  sliderTrack: { width: '100%', height: 8, backgroundColor: theme.border, borderRadius: 4, overflow: 'hidden', marginBottom: 20 },
+  sliderFill: { height: 8, backgroundColor: theme.primary, borderRadius: 4 },
+  sliderBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+  sliderBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: theme.border, minWidth: 50, alignItems: 'center' },
+  sliderBtnActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  sliderBtnText: { color: theme.textSecondary, fontSize: 13, fontWeight: '600' },
   sliderBtnTextActive: { color: '#fff' },
   billCompare: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 },
-  billBox: { flex: 1, backgroundColor: Colors.card, borderRadius: 14, padding: 16, alignItems: 'center' },
-  billBoxLabel: { color: Colors.textSecondary, fontSize: 12 },
-  billBoxVal: { fontSize: 24, fontWeight: '800', marginTop: 4 },
+  billBox: { flex: 1, backgroundColor: theme.card, borderRadius: 18, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: theme.border },
+  billBoxLabel: { color: theme.textSecondary, fontSize: 11, fontWeight: '700' },
+  billBoxVal: { fontSize: 24, fontWeight: '900', marginTop: 4 },
   billArrow: { alignItems: 'center' },
-  billBoxNew: { flex: 1, borderRadius: 14, padding: 16, alignItems: 'center' },
-  billBoxLabelNew: { color: 'rgba(255,255,255,0.8)', fontSize: 12 },
-  billBoxValNew: { color: '#fff', fontSize: 24, fontWeight: '800', marginTop: 4 },
+  billBoxNew: { flex: 1, borderRadius: 18, padding: 16, alignItems: 'center' },
+  billBoxLabelNew: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '700' },
+  billBoxValNew: { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 4 },
   resultGrid: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  resultCard: { flex: 1, borderRadius: 14, padding: 14, alignItems: 'center', gap: 8 },
-  resultVal: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  resultLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 10, textAlign: 'center' },
-  tipsCard: { backgroundColor: Colors.card, borderRadius: 16, padding: 16, marginBottom: 16 },
-  tipsTitle: { color: Colors.textPrimary, fontSize: 15, fontWeight: '700', marginBottom: 12 },
-  tip: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
-  tipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary, marginTop: 6 },
-  tipText: { color: Colors.textSecondary, fontSize: 13, flex: 1, lineHeight: 19 },
-  forecastCard: { borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 1, borderColor: 'rgba(0,200,150,0.2)' },
-  forecastIcon: { fontSize: 24 },
-  forecastTitle: { color: Colors.textPrimary, fontWeight: '700', fontSize: 14, marginBottom: 4 },
-  forecastMsg: { color: Colors.textSecondary, fontSize: 13, lineHeight: 20 },
+  resultCard: { flex: 1, borderRadius: 18, padding: 14, alignItems: 'center', gap: 6 },
+  resultVal: { color: '#fff', fontSize: 18, fontWeight: '900' },
+  resultLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 9, textAlign: 'center', fontWeight: '600' },
+  tipsCard: { backgroundColor: theme.card, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: theme.border },
+  tipsTitle: { color: theme.textPrimary, fontSize: 15, fontWeight: '800', marginBottom: 15 },
+  tip: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
+  tipDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primary, marginTop: 5 },
+  tipText: { color: theme.textSecondary, fontSize: 13, flex: 1, lineHeight: 19 },
+  forecastCard: { borderRadius: 20, padding: 20, flexDirection: 'row', alignItems: 'flex-start', gap: 15, borderWidth: 1, borderColor: theme.border },
+  forecastIcon: { fontSize: 28 },
+  forecastTitle: { color: theme.textPrimary, fontWeight: '800', fontSize: 15, marginBottom: 4 },
+  forecastMsg: { color: theme.textSecondary, fontSize: 13, lineHeight: 20 },
+  emptyCard: { backgroundColor: theme.card, borderRadius: 24, padding: 30, alignItems: 'center', borderWidth: 1, borderColor: theme.border, width: '100%' },
+  emptyIconBox: { width: 100, height: 100, borderRadius: 50, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  emptyTitle: { color: theme.textPrimary, fontSize: 20, fontWeight: '800', marginBottom: 12 },
+  emptyDesc: { color: theme.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 25 },
+  scanBtn: { backgroundColor: theme.primary, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 25, paddingVertical: 15, borderRadius: 15, elevation: 5 },
+  scanBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

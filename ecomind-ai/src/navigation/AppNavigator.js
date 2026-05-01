@@ -15,6 +15,7 @@ import GamificationScreen from '../screens/GamificationScreen';
 import GoalsScreen from '../screens/GoalsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
 import CustomTabBar from './TabBar';
 
 const Tab = createBottomTabNavigator();
@@ -72,6 +73,7 @@ function MoreScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color={theme.textMuted} />
           </TouchableOpacity>
         ))}
+        <View style={{ height: 120 }} />
       </View>
     </ScrollView>
   );
@@ -112,6 +114,7 @@ export default function AppNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
+        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Main" component={MainTabs} />
       </Stack.Navigator>
     </NavigationContainer>

@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Dimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, Dimensions, ActivityIndicator, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
+import { supabase } from '../data/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -15,9 +17,11 @@ const AnalyticsCard = ({ title, value, unit, change, icon, color, theme }) => (
       <Text style={styles(theme).cardTitle}>{title}</Text>
       <Text style={styles(theme).cardValue}>{value} <Text style={styles(theme).cardUnit}>{unit}</Text></Text>
     </View>
-    <View style={[styles(theme).changeBadge, { backgroundColor: change.startsWith('-') ? '#10B98120' : '#EF444420' }]}>
-      <Text style={[styles(theme).changeText, { color: change.startsWith('-') ? '#10B981' : '#EF4444' }]}>{change}</Text>
-    </View>
+    {change && (
+      <View style={[styles(theme).changeBadge, { backgroundColor: change.startsWith('-') ? '#10B98120' : '#EF444420' }]}>
+        <Text style={[styles(theme).changeText, { color: change.startsWith('-') ? '#10B981' : '#EF4444' }]}>{change}</Text>
+      </View>
+    )}
   </View>
 );
 
@@ -25,72 +29,106 @@ export default function AnalyticsScreen() {
   const { theme, isDarkMode } = useTheme();
   const s = styles(theme);
 
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalKwh: 0,
+    totalEuro: 0,
+    co2: 0,
+    devicesDist: [],
+    changeKwh: '0%',
+    changeEuro: '0%'
+  });
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const uid = await AsyncStorage.getItem('user_id');
+      if (!uid) return;
+
+      // 1. Lexojmë faturat e përdoruesit
+      const { data: bills } = await supabase
+        .from('bills')
+        .select('*')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false });
+
+      // 2. Lexojmë pajisjet e përdoruesit
+      const { data: devices } = await supabase
+        .from('devices')
+        .select('*')
+        .eq('user_id', uid);
+
+      let currentKwh = 0, currentEuro = 0, changeK = '0%', changeE = '0%';
+
+      if (bills && bills.length > 0) {
+        currentKwh = bills[0].kwh || 0;
+        currentEuro = bills[0].amount || 0;
+        if (bills.length > 1) {
+          const prevKwh = bills[1].kwh || 1;
+          const prevEuro = bills[1].amount || 1;
+          const diffK = ((currentKwh - prevKwh) / prevKwh * 100).toFixed(1);
+          const diffE = ((currentEuro - prevEuro) / prevEuro * 100).toFixed(1);
+          changeK = (diffK > 0 ? '+' : '') + diffK + '%';
+          changeE = (diffE > 0 ? '+' : '') + diffE + '%';
+        }
+      }
+
+      let devDist = [];
+      if (devices && devices.length > 0) {
+        const totalPower = devices.reduce((sum, d) => sum + (d.avg_consumption || 0), 0) || 1;
+        devDist = devices.map(d => ({
+          name: d.name,
+          percent: Math.round(((d.avg_consumption || 0) / totalPower) * 100),
+          color: d.type === 'ac' ? theme.primary : theme.info
+        })).sort((a, b) => b.percent - a.percent).slice(0, 4);
+      }
+
+      setStats({
+        totalKwh: currentKwh,
+        totalEuro: currentEuro,
+        co2: (currentKwh * 0.45).toFixed(1),
+        devicesDist: devDist,
+        changeKwh: changeK,
+        changeEuro: changeE
+      });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
   return (
-    <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={s.container} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} colors={[theme.primary]} />}>
       <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
-        <Text style={s.headerTitle}>Analitika</Text>
-        <Text style={s.headerSub}>Pasqyra e detajuar e konsumit tuaj</Text>
+        <Text style={s.headerTitle}>Analitika Personale</Text>
+        <Text style={s.headerSub}>Të dhënat specifike për llogarinë tuaj</Text>
       </LinearGradient>
 
       <View style={s.body}>
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Krahasimi me Muajin e Kaluar</Text>
-          <AnalyticsCard 
-            title="Konsumi Total" 
-            value="342" 
-            unit="kWh" 
-            change="-12%" 
-            icon="flash" 
-            color={theme.primary} 
-            theme={theme} 
-          />
-          <AnalyticsCard 
-            title="Kostoja e Faturës" 
-            value="47.85" 
-            unit="€" 
-            change="-8.5%" 
-            icon="card" 
-            color={theme.info} 
-            theme={theme} 
-          />
-          <AnalyticsCard 
-            title="Emetimet CO₂" 
-            value="156" 
-            unit="kg" 
-            change="-15%" 
-            icon="leaf" 
-            color={theme.success} 
-            theme={theme} 
-          />
+          <Text style={s.sectionTitle}>Krahasimi i Faturave</Text>
+          <AnalyticsCard title="Konsumi Total" value={stats.totalKwh} unit="kWh" change={stats.changeKwh} icon="flash" color={theme.primary} theme={theme} />
+          <AnalyticsCard title="Kostoja" value={stats.totalEuro} unit="€" change={stats.changeEuro} icon="card" color={theme.info} theme={theme} />
         </View>
 
         <View style={s.section}>
           <Text style={s.sectionTitle}>Pajisjet më Harxhuese</Text>
-          <View style={s.deviceStats}>
-            {[
-              { name: 'Kondicioneri', percent: 42, color: theme.primary },
-              { name: 'Frigoriferi', percent: 18, color: theme.info },
-              { name: 'Bojleri', percent: 15, color: theme.warning },
-              { name: 'Të tjera', percent: 25, color: theme.textMuted },
-            ].map((d, i) => (
-              <View key={i} style={s.deviceRow}>
-                <View style={s.deviceHeader}>
-                  <Text style={s.deviceName}>{d.name}</Text>
-                  <Text style={s.devicePercent}>{d.percent}%</Text>
+          {stats.devicesDist.length === 0 ? (
+            <Text style={s.emptyText}>Nuk u gjetën pajisje për këtë përdorues.</Text>
+          ) : (
+            <View style={s.deviceStats}>
+              {stats.devicesDist.map((d, i) => (
+                <View key={i} style={s.deviceRow}>
+                  <View style={s.deviceHeader}><Text style={s.deviceName}>{d.name}</Text><Text style={s.devicePercent}>{d.percent}%</Text></View>
+                  <View style={s.progressBarBackground}><View style={[s.progressBarFill, { width: `${d.percent}%`, backgroundColor: d.color }]} /></View>
                 </View>
-                <View style={s.progressBg}>
-                  <View style={[s.progressFill, { width: `${d.percent}%`, backgroundColor: d.color }]} />
-                </View>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
         </View>
-
-        <View style={s.infoBox}>
-          <Ionicons name="information-circle" size={20} color={theme.primary} />
-          <Text style={s.infoText}>Analitika juaj bazohet në leximet e faturave dhe sensorët e pajisjeve smart të lidhura.</Text>
-        </View>
-        
         <View style={{ height: 100 }} />
       </View>
     </ScrollView>
@@ -99,26 +137,25 @@ export default function AnalyticsScreen() {
 
 const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
-  header: { paddingTop: 55, paddingHorizontal: 20, paddingBottom: 24 },
-  headerTitle: { color: theme.textPrimary, fontSize: 26, fontWeight: '800' },
-  headerSub: { color: theme.textSecondary, fontSize: 14, marginTop: 4 },
-  body: { padding: 20 },
-  section: { marginBottom: 24 },
-  sectionTitle: { color: theme.textPrimary, fontSize: 17, fontWeight: '700', marginBottom: 16 },
-  analyticsCard: { backgroundColor: theme.card, borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: theme.border },
-  iconContainer: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 30 },
+  headerTitle: { color: theme.textPrimary, fontSize: 24, fontWeight: '800' },
+  headerSub: { color: theme.textSecondary, fontSize: 13, marginTop: 4 },
+  body: { padding: 24 },
+  section: { marginBottom: 30 },
+  sectionTitle: { color: theme.textPrimary, fontSize: 16, fontWeight: '700', marginBottom: 15 },
+  analyticsCard: { backgroundColor: theme.card, borderRadius: 24, padding: 20, flexDirection: 'row', alignItems: 'center', marginBottom: 15, borderWidth: 1, borderColor: theme.border },
+  iconContainer: { width: 50, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 15 },
   cardTitle: { color: theme.textSecondary, fontSize: 12, marginBottom: 2 },
-  cardValue: { color: theme.textPrimary, fontSize: 18, fontWeight: '800' },
-  cardUnit: { fontSize: 13, fontWeight: '400' },
-  changeBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  changeText: { fontSize: 12, fontWeight: '700' },
+  cardValue: { color: theme.textPrimary, fontSize: 20, fontWeight: '800' },
+  cardUnit: { fontSize: 14 },
+  changeBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  changeText: { fontSize: 11, fontWeight: '700' },
   deviceStats: { backgroundColor: theme.card, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: theme.border },
-  deviceRow: { marginBottom: 16 },
-  deviceHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  deviceName: { color: theme.textPrimary, fontSize: 14, fontWeight: '600' },
-  devicePercent: { color: theme.textSecondary, fontSize: 14, fontWeight: '700' },
-  progressBg: { height: 6, backgroundColor: theme.border, borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: 6, borderRadius: 3 },
-  infoBox: { flexDirection: 'row', padding: 16, backgroundColor: theme.primary + '10', borderRadius: 16, gap: 12, alignItems: 'center' },
-  infoText: { color: theme.primary, fontSize: 12, flex: 1, lineHeight: 18 },
+  deviceRow: { marginBottom: 15 },
+  deviceHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  deviceName: { color: theme.textPrimary, fontSize: 13, fontWeight: '600' },
+  devicePercent: { color: theme.textSecondary, fontSize: 12 },
+  progressBarBackground: { height: 6, backgroundColor: theme.border, borderRadius: 3 },
+  progressBarFill: { height: '100%', borderRadius: 3 },
+  emptyText: { color: theme.textMuted, textAlign: 'center', marginTop: 10 }
 });
