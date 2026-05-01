@@ -1,4 +1,4 @@
-# EcoMind AI+ Kosovo
+# EcoMind AI+ 
 **Smart Energy Management Mobile App per Republiken e Kosoves**
 
 **Live Demo:** [https://helpful-frangipane-06bc54.netlify.app](https://helpful-frangipane-06bc54.netlify.app)
