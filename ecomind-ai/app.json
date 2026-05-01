@@ -1,8 +1,5 @@
 {
   "expo": {
-    "experiments": {
-      "baseUrl": "/EcoMind-AI"
-    },
     "name": "ecomind-ai",
     "slug": "ecomind-ai",
     "version": "1.0.0",
