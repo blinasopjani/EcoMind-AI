@@ -1,0 +1,12 @@
+[build]
+  base = "ecomind-ai"
+  command = "npx expo export --platform web"
+  publish = "dist"
+
+[build.environment]
+  PUBLIC_URL = "/"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
