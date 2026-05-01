@@ -1,7 +1,10 @@
 import React from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
@@ -17,6 +20,8 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import CustomTabBar from './TabBar';
+import { useTheme } from '../theme/ThemeContext';
+import { Colors } from '../theme/colors';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -34,16 +39,8 @@ function MoreStack() {
   );
 }
 
-// Re-importing MoreScreen components logic
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../theme/colors';
-import { useTheme } from '../theme/ThemeContext';
-import { supabase } from '../data/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 function MoreScreen({ navigation }) {
+
   const { theme } = useTheme();
   const s = styles(theme);
 
