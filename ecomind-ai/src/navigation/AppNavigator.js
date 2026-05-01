@@ -57,27 +57,48 @@ function MoreScreen({ navigation }) {
 
   const handlePress = async (item) => {
     if (item.screen === 'Simulator') {
+      console.log('Duke kontrolluar faturat për simuluesin...');
       try {
         const uid = await AsyncStorage.getItem('user_id');
-        const { data: bills } = await supabase
+        console.log('User ID:', uid);
+        
+        if (!uid) {
+          navigation.navigate('Login');
+          return;
+        }
+
+        const { data: bills, error } = await supabase
           .from('bills')
           .select('id')
           .eq('user_id', uid)
           .limit(1);
 
+        if (error) throw error;
+
+        console.log('Faturat e gjetura:', bills?.length || 0);
+
         if (!bills || bills.length === 0) {
-          Alert.alert(
-            'Kërkohet Faturë',
-            'Për të përdorur simuluesin me të dhëna reale, duhet të skanoni të paktën një faturë rryme.',
-            [
-              { text: 'Anulo', style: 'cancel' },
-              { text: 'Skano Tani', onPress: () => navigation.navigate('Bills') }
-            ]
-          );
+          const msg = 'Për të përdorur simuluesin me të dhëna reale, duhet të skanoni të paktën një faturë rryme.';
+          
+          // Fallback për Web nëse Alert.alert nuk funksionon siç duhet
+          if (typeof window !== 'undefined' && window.confirm) {
+            if (window.confirm(msg + '\n\nKlikoni OK për të skanuar tani.')) {
+              navigation.navigate('Bills');
+            }
+          } else {
+            Alert.alert(
+              'Kërkohet Faturë',
+              msg,
+              [
+                { text: 'Anulo', style: 'cancel' },
+                { text: 'Skano Tani', onPress: () => navigation.navigate('Bills') }
+              ]
+            );
+          }
           return;
         }
       } catch (err) {
-        console.error(err);
+        console.error('Gabim gjatë kontrollit të faturave:', err);
       }
     }
     navigation.navigate(item.screen);
