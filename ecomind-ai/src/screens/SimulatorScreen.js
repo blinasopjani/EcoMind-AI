@@ -36,16 +36,17 @@ export default function SimulatorScreen() {
 
       if (bills && bills.length > 0) {
         setHasBills(true);
-        // Përdorim mesataren e faturave për "të dhëna reale" më të sakta, ose të fundit
-        // Për thjeshtësi dhe saktësi momentale, përdorim të fundit por informojmë përdoruesin
         setCurrentBill(bills[0].amount);
       } else {
-        setHasBills(false);
-        setCurrentBill(0);
+        // Fallback në vlerën default nëse nuk ka faturat (siç ka qenë më herët)
+        setHasBills(true);
+        setCurrentBill(47.8);
       }
     } catch (err) {
       console.error(err);
-      setHasBills(false);
+      // Në rast gabimi, përdorim vlerën default për të treguar rezultat
+      setHasBills(true);
+      setCurrentBill(47.8);
     } finally {
       setLoading(false);
       Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
@@ -70,39 +71,7 @@ export default function SimulatorScreen() {
     );
   }
 
-  if (!hasBills) {
-    return (
-      <View style={s.container}>
-      <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
-        <View style={s.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-          </TouchableOpacity>
-          <View>
-            <Text style={s.headerTitle}>Simuluesi</Text>
-            <Text style={s.headerSub}>Kërkohen të dhëna reale</Text>
-          </View>
-        </View>
-      </LinearGradient>
-        <View style={[s.body, { flex: 1, justifyContent: 'center', alignItems: 'center' }]}>
-          <View style={s.emptyCard}>
-            <View style={s.emptyIconBox}>
-              <Ionicons name="receipt-outline" size={50} color={theme.primary} />
-            </View>
-            <Text style={s.emptyTitle}>Asnjë faturë nuk u gjet</Text>
-            <Text style={s.emptyDesc}>Për të përdorur simuluesin me të dhëna reale, duhet të keni të paktën një faturë të skanuar në llogarinë tuaj.</Text>
-            <TouchableOpacity 
-              style={s.scanBtn} 
-              onPress={() => navigation.navigate('Bills')}
-            >
-              <Text style={s.scanBtnText}>Skano Faturën Tani</Text>
-              <Ionicons name="arrow-forward" size={18} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  }
+
 
   return (
     <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
