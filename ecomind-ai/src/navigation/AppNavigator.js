@@ -57,8 +57,11 @@ function MoreScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
-      <LinearGradient colors={theme.background === '#0A0F1E' ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+
+        <LinearGradient colors={theme.background === '#0A0F1E' ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
+
         <Text style={s.headerTitle}>Të Tjera</Text>
         <Text style={s.headerSub}>Shfleto të gjitha funksionet</Text>
       </LinearGradient>
@@ -79,8 +82,11 @@ function MoreScreen({ navigation }) {
         <View style={{ height: 120 }} />
       </View>
     </ScrollView>
+    </View>
+
   );
 }
+
 
 const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },

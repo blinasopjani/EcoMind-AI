@@ -49,15 +49,10 @@ export default function LoginScreen({ navigation }) {
       await AsyncStorage.setItem('user_id', user.id.toString());
       await AsyncStorage.setItem('user_name', user.full_name || '');
 
-      // Kontrollo nëse onboarding është përfunduar
-      const onboardingComplete = await AsyncStorage.getItem('onboarding_complete');
-      
-      if (onboardingComplete === 'true') {
-        navigation.replace('Main');
-      } else {
-        navigation.replace('Onboarding', { userId: user.id });
-      }
+      // Shko direkt në Dashboard (Onboarding shfaqet vetëm te regjistrimi i ri)
+      navigation.replace('Main');
     } catch (error) {
+
       console.error('Login Error:', error);
       setErrorMsg('Ndodhi një gabim gjatë hyrjes.');
     } finally {

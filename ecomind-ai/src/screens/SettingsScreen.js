@@ -111,79 +111,85 @@ export default function SettingsScreen({ navigation }) {
   }
 
   return (
-    <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
-      <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
-        <Text style={s.headerTitle}>Profili & Cilësimet</Text>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
 
-        <LinearGradient colors={theme.gradientPrimary} style={s.profileCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-          <View style={s.avatar}>
-            <Text style={s.avatarText}>{userData.emri.charAt(0).toUpperCase()}</Text>
-          </View>
-          <View style={s.profileInfo}>
-            <Text style={s.profileName}>{userData.emri}</Text>
-            <Text style={s.profileEmail}>{userData.email}</Text>
-          </View>
-          <TouchableOpacity style={s.editBtn} onPress={() => { setEditType('profil'); setFormData({...userData}); setEditModal(true); }}>
-            <Ionicons name="pencil" size={16} color="#fff" />
-          </TouchableOpacity>
-        </LinearGradient>
-      </LinearGradient>
+        <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
+          <Text style={s.headerTitle}>Profili & Cilësimet</Text>
 
-      <View style={s.body}>
-        <View style={s.section}>
-          <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>🏠 Shtëpia Ime</Text>
-            <TouchableOpacity onPress={() => { setEditType('shtepi'); setFormData({...userData}); setEditModal(true); }}>
-              <Text style={s.editLink}>Ndrysho</Text>
+          <LinearGradient colors={theme.gradientPrimary} style={s.profileCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+            <View style={s.avatar}>
+              <Text style={s.avatarText}>{userData.emri.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={s.profileInfo}>
+              <Text style={s.profileName}>{userData.emri}</Text>
+              <Text style={s.profileEmail}>{userData.email}</Text>
+            </View>
+            <TouchableOpacity style={s.editBtn} onPress={() => { setEditType('profil'); setFormData({...userData}); setEditModal(true); }}>
+              <Ionicons name="pencil" size={16} color="#fff" />
             </TouchableOpacity>
-          </View>
-          <View style={s.card}>
-            <SettingRow icon="home" label="Lloji & Madhësia" sub={userData.banimi} color={theme.info} theme={theme} />
-            <SettingRow icon="people" label="Familja" sub={userData.personat} color={theme.primary} theme={theme} />
-            <SettingRow icon="cash" label="Buxheti i Synuar" sub={userData.buxheti} color={theme.warning} theme={theme} />
-          </View>
-        </View>
+          </LinearGradient>
+        </LinearGradient>
 
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>⚙️ Preferencat</Text>
-          <View style={s.card}>
-            <SettingRow icon="moon" label="Mënyra e Errët" type="toggle" value={isDarkMode} onToggle={toggleTheme} color={theme.accent3} theme={theme} />
-            <SettingRow icon="notifications" label="Njoftimet" type="toggle" value={notifications} onToggle={setNotifications} color={theme.primary} theme={theme} />
-          </View>
-        </View>
-
-        <TouchableOpacity style={s.logoutBtn} onPress={logout}>
-          <Ionicons name="log-out" size={20} color="#EF4444" />
-          <Text style={s.logoutText}>Shkyçu</Text>
-        </TouchableOpacity>
-
-        <View style={{ height: 120 }} />
-      </View>
-
-      <Modal visible={editModal} transparent animationType="fade">
-        <View style={s.modalOverlay}>
-          <View style={s.modalContent}>
-            <Text style={s.modalTitle}>{editType === 'profil' ? 'Edito Profilin' : 'Të dhënat e Shtëpisë'}</Text>
-            
-            {editType === 'profil' ? (
-              <TextInput style={s.input} value={formData.emri} onChangeText={(v) => setFormData({...formData, emri: v})} placeholder="Emri i Plotë" placeholderTextColor={theme.textMuted} />
-            ) : (
-              <>
-                <TextInput style={s.input} value={formData.banimi} onChangeText={(v) => setFormData({...formData, banimi: v})} placeholder="Lloji (Shtëpi/Apartament)" placeholderTextColor={theme.textMuted} />
-                <TextInput style={s.input} value={formData.personat} onChangeText={(v) => setFormData({...formData, personat: v})} placeholder="Sa persona jeni?" placeholderTextColor={theme.textMuted} />
-                <TextInput style={s.input} value={formData.buxheti} onChangeText={(v) => setFormData({...formData, buxheti: v})} placeholder="Buxheti mujor (€)" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
-              </>
-            )}
-
-            <View style={s.modalActions}>
-              <TouchableOpacity style={[s.modalBtn, {backgroundColor: theme.border}]} onPress={() => setEditModal(false)}><Text style={{color: theme.textPrimary}}>Anulo</Text></TouchableOpacity>
-              <TouchableOpacity style={[s.modalBtn, {backgroundColor: theme.primary}]} onPress={ruajNdryshimet}><Text style={{color: '#fff'}}>Ruaj</Text></TouchableOpacity>
+        <View style={s.body}>
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <Text style={s.sectionTitle}>🏠 Shtëpia Ime</Text>
+              <TouchableOpacity onPress={() => { setEditType('shtepi'); setFormData({...userData}); setEditModal(true); }}>
+                <Text style={s.editLink}>Ndrysho</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={s.card}>
+              <SettingRow icon="home" label="Lloji & Madhësia" sub={userData.banimi} color={theme.info} theme={theme} />
+              <SettingRow icon="people" label="Familja" sub={userData.personat} color={theme.primary} theme={theme} />
+              <SettingRow icon="cash" label="Buxheti i Synuar" sub={userData.buxheti} color={theme.warning} theme={theme} />
             </View>
           </View>
+
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>⚙️ Preferencat</Text>
+            <View style={s.card}>
+              <SettingRow icon="moon" label="Mënyra e Errët" type="toggle" value={isDarkMode} onToggle={toggleTheme} color={theme.accent3} theme={theme} />
+              <SettingRow icon="notifications" label="Njoftimet" type="toggle" value={notifications} onToggle={setNotifications} color={theme.primary} theme={theme} />
+            </View>
+          </View>
+
+          <TouchableOpacity style={s.logoutBtn} onPress={logout}>
+            <Ionicons name="log-out" size={20} color="#EF4444" />
+            <Text style={s.logoutText}>Shkyçu</Text>
+          </TouchableOpacity>
+
+          <View style={{ height: 120 }} />
         </View>
-      </Modal>
-    </ScrollView>
+      </ScrollView>
+
+      {editModal && (
+        <Modal visible={editModal} transparent animationType="fade">
+          <View style={s.modalOverlay}>
+            <View style={s.modalContent}>
+              <Text style={s.modalTitle}>{editType === 'profil' ? 'Edito Profilin' : 'Të dhënat e Shtëpisë'}</Text>
+              
+              {editType === 'profil' ? (
+                <TextInput style={s.input} value={formData.emri} onChangeText={(v) => setFormData({...formData, emri: v})} placeholder="Emri i Plotë" placeholderTextColor={theme.textMuted} />
+              ) : (
+                <>
+                  <TextInput style={s.input} value={formData.banimi} onChangeText={(v) => setFormData({...formData, banimi: v})} placeholder="Lloji (Shtëpi/Apartament)" placeholderTextColor={theme.textMuted} />
+                  <TextInput style={s.input} value={formData.personat} onChangeText={(v) => setFormData({...formData, personat: v})} placeholder="Sa persona jeni?" placeholderTextColor={theme.textMuted} />
+                  <TextInput style={s.input} value={formData.buxheti} onChangeText={(v) => setFormData({...formData, buxheti: v})} placeholder="Buxheti mujor (€)" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
+                </>
+              )}
+
+              <View style={s.modalActions}>
+                <TouchableOpacity style={[s.modalBtn, {backgroundColor: theme.border}]} onPress={() => setEditModal(false)}><Text style={{color: theme.textPrimary}}>Anulo</Text></TouchableOpacity>
+                <TouchableOpacity style={[s.modalBtn, {backgroundColor: theme.primary}]} onPress={ruajNdryshimet}><Text style={{color: '#fff'}}>Ruaj</Text></TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+    </View>
   );
+
 }
 
 const styles = (theme) => StyleSheet.create({
