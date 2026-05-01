@@ -35,11 +35,13 @@ function MoreStack() {
 }
 
 // Re-importing MoreScreen components logic
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
+import { supabase } from '../data/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 function MoreScreen({ navigation }) {
   const { theme } = useTheme();
@@ -53,6 +55,34 @@ function MoreScreen({ navigation }) {
     { label: 'Profili & Cilësimet', sub: 'Ndrysho preferencat tuaja', icon: 'settings', screen: 'Settings', gradient: ['#EF4444','#DC2626'] },
   ];
 
+  const handlePress = async (item) => {
+    if (item.screen === 'Simulator') {
+      try {
+        const uid = await AsyncStorage.getItem('user_id');
+        const { data: bills } = await supabase
+          .from('bills')
+          .select('id')
+          .eq('user_id', uid)
+          .limit(1);
+
+        if (!bills || bills.length === 0) {
+          Alert.alert(
+            'Kërkohet Faturë',
+            'Për të përdorur simuluesin me të dhëna reale, duhet të skanoni të paktën një faturë rryme.',
+            [
+              { text: 'Anulo', style: 'cancel' },
+              { text: 'Skano Tani', onPress: () => navigation.navigate('Bills') }
+            ]
+          );
+          return;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    navigation.navigate(item.screen);
+  };
+
   return (
     <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
       <LinearGradient colors={theme.background === '#0A0F1E' ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
@@ -62,7 +92,7 @@ function MoreScreen({ navigation }) {
 
       <View style={s.body}>
         {menuItems.map((item, i) => (
-          <TouchableOpacity key={i} onPress={() => navigation.navigate(item.screen)} style={s.menuCard} activeOpacity={0.85}>
+          <TouchableOpacity key={i} onPress={() => handlePress(item)} style={s.menuCard} activeOpacity={0.85}>
             <LinearGradient colors={item.gradient} style={s.menuIcon}>
               <Ionicons name={item.icon} size={24} color="#fff" />
             </LinearGradient>
