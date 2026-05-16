@@ -1,6 +1,7 @@
 {
   "name": "ecomind-ai",
   "version": "1.0.0",
+  "homepage": "https://blinasopjani.github.io/EcoMind-AI",
   "main": "index.js",
   "scripts": {
     "start": "expo start",

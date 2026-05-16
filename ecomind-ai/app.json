@@ -24,7 +24,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "single"
+    },
+    "experiments": {
+      "baseUrl": "/EcoMind-AI"
     },
     "plugins": [
       "expo-font"
