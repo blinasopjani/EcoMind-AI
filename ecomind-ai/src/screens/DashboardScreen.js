@@ -6,6 +6,13 @@ import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import bcrypt from 'bcryptjs';
+import * as Crypto from 'expo-crypto';
+
+bcrypt.setRandomFallback((len) => {
+  const array = Crypto.getRandomBytes(len);
+  return Array.from(array);
+});
 
 const { width } = Dimensions.get('window');
 
@@ -93,7 +100,31 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  const migratePasswords = async () => {
+    try {
+      // Fetch users who likely have plaintext passwords (not starting with $2)
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, password');
+
+      if (users) {
+        for (const user of users) {
+          if (user.password && !user.password.startsWith('$2')) {
+            const salt = bcrypt.genSaltSync(10);
+            const hashedPassword = bcrypt.hashSync(user.password, salt);
+            await supabase.from('users').update({ password: hashedPassword }).eq('id', user.id);
+          }
+        }
+      }
+    } catch (e) {
+      console.log('Migration error:', e);
+    }
+  };
+
+  useEffect(() => { 
+    fetchData(); 
+    migratePasswords(); // Run migration check
+  }, []);
 
   return (
     <View style={s.container}>
@@ -139,7 +170,7 @@ export default function DashboardScreen({ navigation }) {
             <QuickAction icon="scan-outline" label="Skano" color="#3B82F6" onPress={() => navigation.navigate('Bills')} theme={theme} />
             <QuickAction icon="add-outline" label="Pajisjet" color="#10B981" onPress={() => navigation.navigate('Devices')} theme={theme} />
             <QuickAction icon="stats-chart-outline" label="Analitika" color="#8B5CF6" onPress={() => navigation.navigate('Analytics')} theme={theme} />
-            <QuickAction icon="bulb-outline" label="AI Këshilla" color="#F59E0B" onPress={() => navigation.navigate('AI')} theme={theme} />
+            <QuickAction icon="game-controller-outline" label="Luaj" color="#FF3366" onPress={() => navigation.navigate('Gamification')} theme={theme} />
           </View>
 
           <Text style={s.sectionTitle}>Të dhënat tuaja</Text>

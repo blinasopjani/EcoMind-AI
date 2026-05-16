@@ -5,6 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import bcrypt from 'bcryptjs';
+import * as Crypto from 'expo-crypto';
+
+bcrypt.setRandomFallback((len) => {
+  const array = Crypto.getRandomBytes(len);
+  return Array.from(array);
+});
 
 export default function LoginScreen({ navigation }) {
   const { theme, isDarkMode } = useTheme();
@@ -39,7 +46,23 @@ export default function LoginScreen({ navigation }) {
         return;
       }
 
-      if (user.password !== password) {
+      const isHashed = user.password.startsWith('$2a$') || user.password.startsWith('$2b$');
+      let passwordMatch = false;
+
+      if (isHashed) {
+        passwordMatch = bcrypt.compareSync(password, user.password);
+      } else {
+        // Migration check: if not hashed, check plain text
+        passwordMatch = user.password === password;
+        
+        // If plain text matches, hash it now for future safety
+        if (passwordMatch) {
+          const hashedPassword = bcrypt.hashSync(password, 10);
+          await supabase.from('users').update({ password: hashedPassword }).eq('id', user.id);
+        }
+      }
+
+      if (!passwordMatch) {
         setErrorMsg('Fjalëkalimi është i gabuar. Provoni përsëri.');
         setLoading(false);
         return;

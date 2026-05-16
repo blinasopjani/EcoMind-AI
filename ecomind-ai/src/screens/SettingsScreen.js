@@ -115,7 +115,15 @@ export default function SettingsScreen({ navigation }) {
       <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
 
         <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
-          <Text style={s.headerTitle}>Profili & Cilësimet</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 25 }}>
+            <TouchableOpacity 
+              onPress={() => navigation.goBack()} 
+              style={{ marginRight: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: theme.card, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border }}
+            >
+              <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
+            </TouchableOpacity>
+            <Text style={[s.headerTitle, { marginBottom: 0 }]}>Profili & Cilësimet</Text>
+          </View>
 
           <LinearGradient colors={theme.gradientPrimary} style={s.profileCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
             <View style={s.avatar}>

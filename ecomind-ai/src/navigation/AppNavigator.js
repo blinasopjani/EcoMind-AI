@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -31,9 +31,7 @@ function MoreStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MoreMain" component={MoreScreen} />
       <Stack.Screen name="Simulator" component={SimulatorScreen} />
-      <Stack.Screen name="Gamification" component={GamificationScreen} />
       <Stack.Screen name="Goals" component={GoalsScreen} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
     </Stack.Navigator>
   );
@@ -46,9 +44,7 @@ function MoreScreen({ navigation }) {
 
   const menuItems = [
     { label: 'Simuluesi', sub: 'Shih sa kursen para kohe', icon: 'calculator', screen: 'Simulator', gradient: ['#7C3AED','#5B21B6'] },
-    { label: 'Gamification', sub: 'Badges, sfidat & leaderboard', icon: 'game-controller', screen: 'Gamification', gradient: ['#F59E0B','#D97706'] },
     { label: 'Objektivat', sub: 'Cakto dhe arritë qëllimet', icon: 'flag', screen: 'Goals', gradient: ['#00C896','#00A87A'] },
-    { label: 'Njoftimet', sub: 'Shqyrto të gjitha njoftimet', icon: 'notifications', screen: 'Notifications', gradient: ['#1A73E8','#1557B0'] },
     { label: 'Profili & Cilësimet', sub: 'Ndrysho preferencat tuaja', icon: 'settings', screen: 'Settings', gradient: ['#EF4444','#DC2626'] },
   ];
 
@@ -102,18 +98,50 @@ const styles = (theme) => StyleSheet.create({
 });
 
 function MainTabs() {
+  const navigation = useNavigation();
+  const { theme } = useTheme();
+
   return (
-    <Tab.Navigator
-      tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Devices" component={DevicesScreen} />
-      <Tab.Screen name="Bills" component={BillScanScreen} />
-      <Tab.Screen name="AI" component={AIInsightsScreen} />
-      <Tab.Screen name="Analytics" component={AnalyticsScreen} />
-      <Tab.Screen name="More" component={MoreStack} />
-    </Tab.Navigator>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <Tab.Navigator
+        tabBar={(props) => <CustomTabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tab.Screen name="Dashboard" component={DashboardScreen} />
+        <Tab.Screen name="Devices" component={DevicesScreen} />
+        <Tab.Screen name="Bills" component={BillScanScreen} />
+        <Tab.Screen name="Gamification" component={GamificationScreen} />
+        <Tab.Screen name="More" component={MoreStack} />
+      </Tab.Navigator>
+
+      {/* Floating AI Button */}
+      <TouchableOpacity 
+        style={{
+          position: 'absolute',
+          bottom: 100,
+          right: 20,
+          width: 58,
+          height: 58,
+          borderRadius: 29,
+          justifyContent: 'center',
+          alignItems: 'center',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 6,
+          elevation: 6
+        }}
+        activeOpacity={0.8}
+        onPress={() => navigation.navigate('AI')}
+      >
+        <LinearGradient 
+          colors={['#3B82F6', '#2563EB']} 
+          style={{ width: '100%', height: '100%', borderRadius: 29, justifyContent: 'center', alignItems: 'center' }}
+        >
+          <Ionicons name="sparkles" size={26} color="#fff" />
+        </LinearGradient>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -125,6 +153,8 @@ export default function AppNavigator() {
         <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Main" component={MainTabs} />
+        <Stack.Screen name="AI" component={AIInsightsScreen} />
+        <Stack.Screen name="Analytics" component={AnalyticsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

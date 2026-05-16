@@ -48,7 +48,7 @@ const ChallengeCard = ({ id, title, sub, points, time, icon, color, theme, onSta
       onPress={() => onStart(id, points)}
       style={[styles(theme).startBtn, { backgroundColor: isCompleted ? theme.success : color }]}
     >
-      <Text style={styles(theme).startBtnText}>{isCompleted ? 'E kryer' : 'Nisja'}</Text>
+      <Text style={styles(theme).startBtnText}>{isCompleted ? 'E kryer' : 'Fillo'}</Text>
     </TouchableOpacity>
   </View>
 );
@@ -92,7 +92,7 @@ export default function GamificationScreen() {
       [
         { text: "Anulo", style: "cancel" },
         { 
-          text: "Fillo", 
+          text: "Prano Sfidën", 
           onPress: async () => {
             // Simulojmë përfundimin për këtë demo, ose mund të shtohet timer
             const newPoints = points + challengePoints;

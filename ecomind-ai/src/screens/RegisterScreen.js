@@ -5,6 +5,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import bcrypt from 'bcryptjs';
+import * as Crypto from 'expo-crypto';
+
+// Fix for bcrypt random fallback in Expo
+bcrypt.setRandomFallback((len) => {
+  const array = Crypto.getRandomBytes(len);
+  return Array.from(array);
+});
 
 export default function RegisterScreen({ navigation }) {
   const { theme } = useTheme();
@@ -49,7 +57,7 @@ export default function RegisterScreen({ navigation }) {
           { 
             full_name: name, 
             email: email.toLowerCase().trim(), 
-            password: password,
+            password: bcrypt.hashSync(password, 10),
             created_at: new Date().toISOString()
           }
         ])
@@ -67,7 +75,7 @@ export default function RegisterScreen({ navigation }) {
 
     } catch (error) {
       console.log('Register Error:', error);
-      setErrorMsg('Ndodhi një gabim gjatë regjistrimit.');
+      setErrorMsg(error.message || 'Ndodhi një gabim gjatë regjistrimit.');
     } finally {
       setLoading(false);
     }
@@ -76,13 +84,17 @@ export default function RegisterScreen({ navigation }) {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.container}>
       <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-
-        <View style={s.header}>
-          <Text style={s.title}>Krijo Llogarinë</Text>
-          <Text style={s.subtitle}>Hapi i parë drejt kursimit të energjisë</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 40 }}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()} 
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.card, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border, marginRight: 16 }}
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
+          </TouchableOpacity>
+          <View>
+            <Text style={s.title}>Krijo Llogarinë</Text>
+            <Text style={s.subtitle}>Hapi i parë drejt kursimit të energjisë</Text>
+          </View>
         </View>
 
         <View style={s.form}>

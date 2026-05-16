@@ -32,9 +32,9 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
           const getIcon = (name) => {
             switch (name) {
               case 'Dashboard': return 'home';
+              case 'Gamification': return 'game-controller';
               case 'Devices': return 'flash';
               case 'Bills': return 'scan';
-              case 'AI': return 'sparkles';
               case 'Analytics': return 'stats-chart';
               case 'More': return 'grid';
               default: return 'help-circle';
@@ -44,9 +44,9 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
           const getLabel = (name) => {
             switch (name) {
               case 'Dashboard': return 'Fillimi';
+              case 'Gamification': return 'Sfidat';
               case 'Devices': return 'Pajisjet';
               case 'Bills': return 'Skano';
-              case 'AI': return 'AI';
               case 'Analytics': return 'Analiza';
               case 'More': return 'Më shumë';
               default: return name;

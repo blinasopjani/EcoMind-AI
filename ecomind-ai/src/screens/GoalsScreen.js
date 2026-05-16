@@ -117,11 +117,18 @@ export default function GoalsScreen({ navigation }) {
     <View style={s.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
-          <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-          </TouchableOpacity>
-          <Text style={s.headerTitle}>Objektivat</Text>
-          <Text style={s.headerSub}>Sfidoni veten për të kursyer më shumë</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity 
+              onPress={() => navigation.goBack()} 
+              style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.card, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border, marginRight: 16 }}
+            >
+              <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
+            </TouchableOpacity>
+            <View>
+              <Text style={s.headerTitle}>Objektivat</Text>
+              <Text style={s.headerSub}>Sfidoni veten për të kursyer më shumë</Text>
+            </View>
+          </View>
         </LinearGradient>
 
         <View style={s.body}>

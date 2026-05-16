@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Dimensions, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Dimensions, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
@@ -27,6 +28,7 @@ const AnalyticsCard = ({ title, value, unit, change, icon, color, theme }) => (
 
 export default function AnalyticsScreen() {
   const { theme, isDarkMode } = useTheme();
+  const navigation = useNavigation();
   const s = styles(theme);
 
   const [loading, setLoading] = useState(true);
@@ -103,8 +105,18 @@ export default function AnalyticsScreen() {
   return (
     <ScrollView style={s.container} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} colors={[theme.primary]} />}>
       <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
-        <Text style={s.headerTitle}>Analitika Personale</Text>
-        <Text style={s.headerSub}>Të dhënat specifike për llogarinë tuaj</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()} 
+            style={{ marginRight: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: theme.card, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border }}
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
+          </TouchableOpacity>
+          <View>
+            <Text style={s.headerTitle}>Analiza Personale</Text>
+            <Text style={s.headerSub}>Të dhënat specifike për llogarinë tuaj</Text>
+          </View>
+        </View>
       </LinearGradient>
 
       <View style={s.body}>
