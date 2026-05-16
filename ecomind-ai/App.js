@@ -3,9 +3,38 @@ import { View, Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { ThemeProvider } from './src/theme/ThemeContext';
+import * as Font from 'expo-font';
+import { useEffect, useState } from 'react';
+import { Ionicons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 
 export default function App() {
   const isWeb = Platform.OS === 'web';
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+
+  useEffect(() => {
+    async function loadFonts() {
+      try {
+        const fontMap = isWeb ? {
+          'ionicons': '/EcoMind-AI/fonts/Ionicons.ttf',
+          'material-community': '/EcoMind-AI/fonts/MaterialCommunityIcons.ttf',
+          'font-awesome': '/EcoMind-AI/fonts/FontAwesome.ttf',
+        } : {
+          ...Ionicons.font,
+          ...MaterialCommunityIcons.font,
+          ...FontAwesome.font,
+        };
+
+        await Font.loadAsync(fontMap);
+        setFontsLoaded(true);
+      } catch (e) {
+        console.warn('Font loading error:', e);
+        setFontsLoaded(true);
+      }
+    }
+    loadFonts();
+  }, []);
+
+  if (!fontsLoaded) return null;
 
   const content = (
     <View style={styles.appContainer}>
