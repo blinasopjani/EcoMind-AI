@@ -1,7 +1,7 @@
 # EcoMind AI+ 
 **Smart Energy Management Mobile App per Republiken e Kosoves**
 
-**Live Demo:** [https://helpful-frangipane-06bc54.netlify.app](https://helpful-frangipane-06bc54.netlify.app)
+**Live Demo:** [https://blinasopjani.github.io/EcoMind-AI](https://blinasopjani.github.io/EcoMind-AI)
 
 EcoMind AI+ eshte nje aplikacion inteligjent qe ndihmon familjet dhe bizneset ne Kosove te monitorojne konsumin e energjise elektrike, te analizojne faturat dhe te kursejne para permes rekomandimeve te AI.
 
@@ -31,7 +31,12 @@ EcoMind AI+ eshte nje aplikacion inteligjent qe ndihmon familjet dhe bizneset ne
 3. Nisni serverin: uvicorn app.main:app --reload
 
 ## Deployment
-Aplikacioni eshte i konfiguruar per deployment automatik ne Netlify (Frontend) dhe Railway (Backend).
+Aplikacioni eshte i konfiguruar per deployment ne **GitHub Pages** (Frontend) dhe **Railway** (Backend).
+Per te publikuar versionin e ri te frontendas, ekzekutoni:
+```bash
+cd ecomind-ai
+npm run deploy
+```
 
 ---
 *Projekt i krijuar per te zgjidhur problemin e faturave te larta te energjise ne Kosove.*
