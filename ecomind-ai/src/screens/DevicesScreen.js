@@ -122,7 +122,7 @@ export default function DevicesScreen() {
 
   return (
     <View style={s.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
           <Text style={s.headerTitle}>Pajisjet Tuaja</Text>
           <Text style={s.headerSub}>Secili account sheh pajisjet e veta</Text>

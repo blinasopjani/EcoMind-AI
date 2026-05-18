@@ -131,6 +131,7 @@ export default function AIInsightsScreen() {
   return (
     <View style={s.container}>
       <ScrollView 
+        style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} colors={[theme.primary]} />}
       >

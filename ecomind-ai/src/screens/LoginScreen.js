@@ -85,7 +85,7 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.container}>
-      <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={s.header}>
           <LinearGradient colors={theme.gradientPrimary} style={s.logoContainer}>
             <Ionicons name="leaf" size={40} color="#fff" />

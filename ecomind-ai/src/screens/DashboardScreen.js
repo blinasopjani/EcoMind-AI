@@ -129,7 +129,7 @@ export default function DashboardScreen({ navigation }) {
   return (
     <View style={s.container}>
       <StatusBar style="light" />
-      <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} tintColor="#fff" />}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} tintColor="#fff" />}>
         
         <LinearGradient colors={['#059669', '#10B981', '#34D399']} style={s.hero} start={{x: 0, y: 0}} end={{x: 1, y: 1}}>
           <SafeAreaSpacer />

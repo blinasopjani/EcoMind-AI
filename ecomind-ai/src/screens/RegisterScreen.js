@@ -83,7 +83,7 @@ export default function RegisterScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.container}>
-      <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 40 }}>
           <TouchableOpacity 
             onPress={() => navigation.goBack()} 

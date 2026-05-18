@@ -240,7 +240,7 @@ export default function OnboardingScreen({ navigation, route }) {
         <Text style={s.headerTitle}>Hapi {step} nga 4</Text>
       </LinearGradient>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         {renderStep()}
       </ScrollView>
 

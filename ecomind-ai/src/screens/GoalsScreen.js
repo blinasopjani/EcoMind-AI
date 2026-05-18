@@ -115,7 +115,7 @@ export default function GoalsScreen({ navigation }) {
 
   return (
     <View style={s.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity 
