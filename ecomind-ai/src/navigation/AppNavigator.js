@@ -28,7 +28,7 @@ const Stack = createStackNavigator();
 
 function MoreStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
       <Stack.Screen name="MoreMain" component={MoreScreen} />
       <Stack.Screen name="Simulator" component={SimulatorScreen} />
       <Stack.Screen name="Goals" component={GoalsScreen} />
@@ -148,7 +148,7 @@ function MainTabs() {
 export default function AppNavigator() {
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
