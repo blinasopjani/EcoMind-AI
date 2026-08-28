@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import { showAlert } from '../data/alertHelper';
 
 const { width } = Dimensions.get('window');
 
@@ -20,7 +22,8 @@ const PrizeCard = ({ title, company, points, icon, gradient, theme, userPoints, 
       </View>
       <TouchableOpacity 
         style={[styles(theme).pointsBadge, canAfford && { backgroundColor: theme.primary }]}
-        onPress={() => canAfford && onRedeem(title, points)}
+        onPress={() => onRedeem(title, points)}
+        activeOpacity={canAfford ? 0.7 : 1}
       >
         <Text style={[styles(theme).pointsText, canAfford && { color: '#fff' }]}>{points} pts</Text>
       </TouchableOpacity>
@@ -43,7 +46,7 @@ const ChallengeCard = ({ id, title, sub, points, time, durationMs, icon, color, 
         <Text style={styles(theme).challengeMetaText}>+{points} Pikë</Text>
       </View>
       {isInProgress && !isCompleted && (
-        <Text style={{ color: color, fontSize: 10, fontWeight: '700', marginTop: 3 }}>NË PROGRES — ështuo sfidën pastaj mërr pikët</Text>
+        <Text style={{ color: color, fontSize: 10, fontWeight: '700', marginTop: 3 }}>NË PROGRES — kthehu dhe shtyp "Mërr pikët"</Text>
       )}
     </View>
     {isCompleted ? (
@@ -54,6 +57,7 @@ const ChallengeCard = ({ id, title, sub, points, time, durationMs, icon, color, 
       <TouchableOpacity
         onPress={() => onComplete(id, points)}
         style={[styles(theme).startBtn, { backgroundColor: color }]}
+        activeOpacity={0.7}
       >
         <Text style={styles(theme).startBtnText}>Mërr pikët</Text>
       </TouchableOpacity>
@@ -61,6 +65,7 @@ const ChallengeCard = ({ id, title, sub, points, time, durationMs, icon, color, 
       <TouchableOpacity
         onPress={() => onStart(id, points, durationMs)}
         style={[styles(theme).startBtn, { backgroundColor: color }]}
+        activeOpacity={0.7}
       >
         <Text style={styles(theme).startBtnText}>Fillo</Text>
       </TouchableOpacity>
@@ -71,19 +76,20 @@ const ChallengeCard = ({ id, title, sub, points, time, durationMs, icon, color, 
 export default function GamificationScreen() {
   const { theme, isDarkMode } = useTheme();
   const s = styles(theme);
+  const navigation = useNavigation();
 
   const [activeTab, setActiveTab] = useState('sfidat');
   const [points, setPoints] = useState(0);
   const [level, setLevel] = useState(1);
   const [completedChallenges, setCompletedChallenges] = useState([]);
-  // { id: string, deadline: ISO string }
   const [inProgressChallenges, setInProgressChallenges] = useState([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
+  const [userId, setUserId] = useState(null);
 
-  // Tick every 30s so timeLeft labels refresh
+  // Tick every 10s so timeLeft labels refresh
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30000);
+    const t = setInterval(() => setNow(Date.now()), 10000);
     return () => clearInterval(t);
   }, []);
 
@@ -91,12 +97,34 @@ export default function GamificationScreen() {
     loadStats();
   }, []);
 
+  // Refresh when user navigates to this screen
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadStats();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  const getKeys = (uid) => ({
+    points: `${uid}_points`,
+    level: `${uid}_level`,
+    completed: `${uid}_completed_challenges`,
+    inProgress: `${uid}_in_progress_challenges`,
+  });
+
   const loadStats = async () => {
     try {
-      const savedPoints = await AsyncStorage.getItem('user_points');
-      const savedLevel = await AsyncStorage.getItem('user_level');
-      const savedChallenges = await AsyncStorage.getItem('completed_challenges');
-      const savedInProgress = await AsyncStorage.getItem('in_progress_challenges');
+      const uid = await AsyncStorage.getItem('user_id');
+      setUserId(uid);
+      if (!uid) {
+        setLoading(false);
+        return;
+      }
+      const keys = getKeys(uid);
+      const savedPoints = await AsyncStorage.getItem(keys.points);
+      const savedLevel = await AsyncStorage.getItem(keys.level);
+      const savedChallenges = await AsyncStorage.getItem(keys.completed);
+      const savedInProgress = await AsyncStorage.getItem(keys.inProgress);
 
       if (savedPoints) setPoints(parseInt(savedPoints));
       if (savedLevel) setLevel(parseInt(savedLevel));
@@ -110,12 +138,13 @@ export default function GamificationScreen() {
   };
 
   const handleStartChallenge = async (id, challengePoints, durationMs) => {
+    if (!userId) return;
     if (completedChallenges.includes(id)) return;
     if (inProgressChallenges.find(c => c.id === id)) return;
 
-    Alert.alert(
+    showAlert(
       "Sfidë e Re",
-      `A dëshiron të fillosh këtë sfidë? Kur të mbarojë koha do të mërrësh ${challengePoints} pikë.`,
+      `A dëshiron të fillosh këtë sfidë? Kur të mbarojë koha do të marrësh ${challengePoints} pikë.`,
       [
         { text: "Anulo", style: "cancel" },
         {
@@ -124,8 +153,9 @@ export default function GamificationScreen() {
             const deadline = new Date(Date.now() + (durationMs || 60000)).toISOString();
             const updated = [...inProgressChallenges, { id, deadline, points: challengePoints }];
             setInProgressChallenges(updated);
-            await AsyncStorage.setItem('in_progress_challenges', JSON.stringify(updated));
-            Alert.alert("✅ Sfida filloi!", `Kur të përfundojë koha, kthehu dhe shtyp "Mërr pikët"!`);
+            const keys = getKeys(userId);
+            await AsyncStorage.setItem(keys.inProgress, JSON.stringify(updated));
+            showAlert("✅ Sfida filloi!", `Kur të përfundojë koha, kthehu dhe shtyp "Mërr pikët"!`);
           }
         }
       ]
@@ -133,6 +163,7 @@ export default function GamificationScreen() {
   };
 
   const handleCompleteChallenge = async (id, challengePoints) => {
+    if (!userId) return;
     const entry = inProgressChallenges.find(c => c.id === id);
     if (!entry) return;
 
@@ -146,26 +177,33 @@ export default function GamificationScreen() {
     setLevel(newLevel);
     setInProgressChallenges(updatedInProgress);
 
-    await AsyncStorage.setItem('user_points', newPoints.toString());
-    await AsyncStorage.setItem('user_level', newLevel.toString());
-    await AsyncStorage.setItem('completed_challenges', JSON.stringify(newChallenges));
-    await AsyncStorage.setItem('in_progress_challenges', JSON.stringify(updatedInProgress));
+    const keys = getKeys(userId);
+    await AsyncStorage.setItem(keys.points, newPoints.toString());
+    await AsyncStorage.setItem(keys.level, newLevel.toString());
+    await AsyncStorage.setItem(keys.completed, JSON.stringify(newChallenges));
+    await AsyncStorage.setItem(keys.inProgress, JSON.stringify(updatedInProgress));
 
-    Alert.alert("🎉 Urime!", `Fitove ${challengePoints} pikë!`);
+    // Also save redeemable history for rewards in settings
+    showAlert("🎉 Urime!", `Fitove ${challengePoints} pikë! Totali: ${newPoints} pikë.`);
   };
 
-  // Helper: ms left formatted
   const getTimeLeft = (deadline) => {
     const ms = new Date(deadline).getTime() - now;
     if (ms <= 0) return 'Gati — mërr pikët!';
     const h = Math.floor(ms / 3600000);
     const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
     if (h > 0) return `${h}h ${m}m mbetur`;
-    return `${m}m mbetur`;
+    if (m > 0) return `${m}m mbetur`;
+    return `${s}s mbetur`;
   };
 
   const handleRedeem = (title, cost) => {
-    Alert.alert(
+    if (points < cost) {
+      showAlert('Pikë të Pamjaftueshme', `Keni ${points} pikë. Ju duhen ${cost} pikë për "${title}".`);
+      return;
+    }
+    showAlert(
       "Përdor Pikët",
       `A dëshiron të shkëmbesh ${cost} pikë për "${title}"?`,
       [
@@ -174,14 +212,16 @@ export default function GamificationScreen() {
           text: "Po",
           onPress: async () => {
             const newPoints = points - cost;
-            // Gjenerojmë një kod lokal për shpërblimin (pa premtime false për email)
             const code = 'ECO-' + Math.random().toString(36).slice(2, 8).toUpperCase();
             setPoints(newPoints);
-            await AsyncStorage.setItem('user_points', newPoints.toString());
+            if (userId) {
+              const keys = getKeys(userId);
+              await AsyncStorage.setItem(keys.points, newPoints.toString());
+            }
             const redeemed = JSON.parse((await AsyncStorage.getItem('redeemed_rewards')) || '[]');
             redeemed.push({ title, code, at: new Date().toISOString() });
             await AsyncStorage.setItem('redeemed_rewards', JSON.stringify(redeemed));
-            Alert.alert("Kodi juaj i shpërblimit", `${code}\n\nRuajeni këtë kod për "${title}".`);
+            showAlert("Kodi juaj i shpërblimit", `${code}\n\nRuajeni këtë kod për "${title}".`);
           }
         }
       ]
@@ -218,9 +258,14 @@ export default function GamificationScreen() {
               <Text style={s.statVal}>Lvl {level}</Text>
               <Text style={s.statLbl}>{level > 5 ? 'Eco Master' : 'Eco Warrior'}</Text>
             </View>
+            <View style={s.statDivider} />
+            <View style={s.statItem}>
+              <Text style={s.statVal}>{completedChallenges.length}</Text>
+              <Text style={s.statLbl}>Të Kryera</Text>
+            </View>
           </View>
           <View style={s.xpBarBg}>
-            <View style={[s.xpBarFill, { width: `${progress}%` }]} />
+            <View style={[s.xpBarFill, { width: `${Math.min(100, progress)}%` }]} />
           </View>
           <Text style={s.xpText}>Edhe {1000 - currentLevelXp} pikë për Lvl {level + 1}</Text>
         </LinearGradient>
@@ -231,6 +276,7 @@ export default function GamificationScreen() {
               key={tab} 
               onPress={() => setActiveTab(tab.toLowerCase())}
               style={[s.tabItem, activeTab === tab.toLowerCase() && s.tabActive]}
+              activeOpacity={0.7}
             >
               <Text style={[s.tabText, activeTab === tab.toLowerCase() && s.tabTextActive]}>{tab}</Text>
             </TouchableOpacity>
@@ -290,12 +336,30 @@ export default function GamificationScreen() {
               isInProgress={!!inProgressChallenges.find(c => c.id === 'c3')}
               timeLeft={inProgressChallenges.find(c => c.id === 'c3') ? getTimeLeft(inProgressChallenges.find(c => c.id === 'c3').deadline) : null}
             />
+
+            <Text style={[s.sectionTitle, { marginTop: 20 }]}>Sfida Provuese</Text>
+            <ChallengeCard 
+              id="c_test"
+              title="Sfida 10 Sekondash" 
+              sub="Provo sistemin e sfidave! Prit 10 sekonda."
+              points={50}
+              time="10 sekonda"
+              durationMs={10000}
+              icon="flash" 
+              color="#8B5CF6" 
+              theme={theme} 
+              onStart={handleStartChallenge}
+              onComplete={handleCompleteChallenge}
+              isCompleted={completedChallenges.includes('c_test')}
+              isInProgress={!!inProgressChallenges.find(c => c.id === 'c_test')}
+              timeLeft={inProgressChallenges.find(c => c.id === 'c_test') ? getTimeLeft(inProgressChallenges.find(c => c.id === 'c_test').deadline) : null}
+            />
           </>
         )}
 
         {activeTab === 'shpërblimet' && (
           <>
-            <Text style={s.sectionTitle}>Shpërblime nga Partnerët</Text>
+            <Text style={s.sectionTitle}>Shpërblimet nga Partnerët</Text>
             <PrizeCard 
               title="Kupon -15% Zbritje" 
               company="NEPTUN" 
@@ -326,6 +390,16 @@ export default function GamificationScreen() {
               userPoints={points}
               onRedeem={handleRedeem}
             />
+            <PrizeCard 
+              title="Kafe Falas" 
+              company="Coffee House" 
+              points={200} 
+              icon="cafe" 
+              gradient={['#92400e', '#78350f']} 
+              theme={theme} 
+              userPoints={points}
+              onRedeem={handleRedeem}
+            />
           </>
         )}
 
@@ -346,8 +420,8 @@ const styles = (theme) => StyleSheet.create({
   statsCard: { borderRadius: 24, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
   statsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   statItem: { flex: 1, alignItems: 'center' },
-  statVal: { color: '#fff', fontSize: 24, fontWeight: '900' },
-  statLbl: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 4 },
+  statVal: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  statLbl: { color: 'rgba(255,255,255,0.7)', fontSize: 10, marginTop: 4, textAlign: 'center' },
   statDivider: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.2)' },
   xpBarBg: { height: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 4, overflow: 'hidden' },
   xpBarFill: { height: 8, backgroundColor: '#fff', borderRadius: 4 },
@@ -365,7 +439,7 @@ const styles = (theme) => StyleSheet.create({
   challengeSub: { color: theme.textSecondary, fontSize: 12, marginTop: 2, marginBottom: 8 },
   challengeMeta: { flexDirection: 'row', alignItems: 'center' },
   challengeMetaText: { color: theme.textMuted, fontSize: 11, marginLeft: 4 },
-  startBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
+  startBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   startBtnText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   prizeCard: { backgroundColor: theme.card, borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: theme.border },
   prizeIcon: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

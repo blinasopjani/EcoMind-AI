@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Modal, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Modal, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import { showAlert } from '../data/alertHelper';
+
 
 const DeviceItem = ({ id, name, type, power, status, onToggle, onEdit, onDelete, theme }) => (
   <View style={styles(theme).deviceCard}>
@@ -35,6 +38,7 @@ const DeviceItem = ({ id, name, type, power, status, onToggle, onEdit, onDelete,
 export default function DevicesScreen() {
   const { theme, isDarkMode } = useTheme();
   const s = styles(theme);
+  const navigation = useNavigation();
 
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,18 +46,28 @@ export default function DevicesScreen() {
   const [editingId, setEditingId] = useState(null);
   const [newName, setNewName] = useState('');
   const [newPower, setNewPower] = useState('');
+  const [newType, setNewType] = useState('bulb');
   const [userId, setUserId] = useState(null);
 
+  const getUserId = async () => {
+    const id = await AsyncStorage.getItem('user_id');
+    if (id) {
+      setUserId(id);
+      fetchDevices(id);
+    }
+  };
+
   useEffect(() => {
-    const getUserId = async () => {
-      const id = await AsyncStorage.getItem('user_id');
-      if (id) {
-        setUserId(id);
-        fetchDevices(id);
-      }
-    };
     getUserId();
   }, []);
+
+  // Add focus listener for real-time synchronization when user enters the screen
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      getUserId();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const fetchDevices = async (uid) => {
     setLoading(true);
@@ -61,22 +75,49 @@ export default function DevicesScreen() {
       const { data, error } = await supabase
         .from('devices')
         .select('*')
-        .eq('user_id', uid); // FILTER BY USER ID
+        .eq('user_id', uid);
 
       if (error) throw error;
       if (data) {
-        setDevices(data.map(d => ({
-          id: d.id,
-          name: d.name || 'Pa emër',
-          type: d.type || 'bulb',
-          power: d.avg_consumption || d.power || 0,
-          status: false
-        })));
+        setDevices(data.map(d => {
+          const dbType = d.type || 'bulb_off';
+          const isOn = dbType.endsWith('_on');
+          const baseType = dbType.replace(/_(on|off)$/, '');
+          return {
+            id: d.id,
+            name: d.name || 'Pa emër',
+            type: baseType || 'bulb',
+            power: d.avg_consumption || d.power || 0,
+            status: isOn
+          };
+        }));
       }
     } catch (err) {
-      Alert.alert('Gabim', 'Nuk u arritën të ngarkohen pajisjet. Provoni përsëri.');
+      showAlert('Gabim', 'Nuk u arritën të ngarkohen pajisjet. Provoni përsëri.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onToggle = async (id, st) => {
+    const dev = devices.find(d => d.id === id);
+    if (!dev) return;
+
+    // Toggle local state immediately
+    setDevices(devices.map(d => d.id === id ? { ...d, status: st } : d));
+
+    try {
+      const dbType = `${dev.type}_${st ? 'on' : 'off'}`;
+      const { error } = await supabase
+        .from('devices')
+        .update({ type: dbType })
+        .eq('id', id);
+      if (error) throw error;
+    } catch (err) {
+      console.warn("Toggle error:", err);
+      // Rollback on failure
+      setDevices(devices.map(d => d.id === id ? { ...d, status: !st } : d));
+      showAlert('Gabim', 'Nuk u arrit të ndryshohej statusi i pajisjes.');
     }
   };
 
@@ -85,16 +126,24 @@ export default function DevicesScreen() {
 
     const power = parseInt(newPower, 10);
     if (isNaN(power) || power < 0) {
-      Alert.alert('Gabim', 'Fuqia duhet të jetë një numër i vlefshëm (W).');
+      showAlert('Gabim', 'Fuqia duhet të jetë një numër i vlefshëm (W).');
       return;
     }
 
     setLoading(true);
     try {
+      let dbTypeFinal = `${newType}_off`;
+      if (editingId) {
+        const existing = devices.find(d => d.id === editingId);
+        const status = existing ? existing.status : false;
+        dbTypeFinal = `${newType}_${status ? 'on' : 'off'}`;
+      }
+
       const payload = {
         name: newName.trim(),
         avg_consumption: power,
-        user_id: userId // SAVE USER ID
+        type: dbTypeFinal,
+        user_id: userId
       };
 
       if (editingId) {
@@ -105,20 +154,33 @@ export default function DevicesScreen() {
       setModalVisible(false);
       fetchDevices(userId);
     } catch (err) {
-      Alert.alert('Gabim', err.message);
+      showAlert('Gabim', err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const deleteDevice = async (id) => {
-    try {
-      const { error } = await supabase.from('devices').delete().eq('id', id);
-      if (error) throw error;
-      fetchDevices(userId);
-    } catch (err) {
-      Alert.alert('Gabim', err.message);
-    }
+    showAlert(
+      'Fshi Pajisjen',
+      'A jeni të sigurt që dëshironi ta fshini këtë pajisje?',
+      [
+        { text: 'Anulo', style: 'cancel' },
+        {
+          text: 'Fshi',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase.from('devices').delete().eq('id', id);
+              if (error) throw error;
+              fetchDevices(userId);
+            } catch (err) {
+              showAlert('Gabim', err.message);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const activeDevices = devices.filter(d => d.status);
@@ -149,13 +211,13 @@ export default function DevicesScreen() {
                 <DeviceItem 
                   key={device.id} 
                   {...device} 
-                  onToggle={(id, st) => setDevices(devices.map(d => d.id === id ? {...d, status: st} : d))}
-                  onEdit={(d) => { setEditingId(d.id); setNewName(d.name); setNewPower(d.power.toString()); setModalVisible(true); }}
+                  onToggle={onToggle}
+                  onEdit={(d) => { setEditingId(d.id); setNewName(d.name); setNewPower(d.power.toString()); setNewType(d.type); setModalVisible(true); }}
                   onDelete={deleteDevice}
                   theme={theme} 
                 />
               ))}
-              <TouchableOpacity style={s.addBtn} onPress={() => { setEditingId(null); setNewName(''); setNewPower(''); setModalVisible(true); }}>
+              <TouchableOpacity style={s.addBtn} onPress={() => { setEditingId(null); setNewName(''); setNewPower(''); setNewType('bulb'); setModalVisible(true); }}>
                 <Ionicons name="add-circle" size={24} color="#fff" />
                 <Text style={s.addBtnText}>Shto Pajisje</Text>
               </TouchableOpacity>
@@ -169,11 +231,34 @@ export default function DevicesScreen() {
       <Modal visible={modalVisible} transparent animationType="fade">
         <View style={s.modalOverlay}>
           <View style={s.modalContent}>
-            <Text style={s.modalTitle}>{editingId ? 'Edito' : 'Shto'}</Text>
-            <TextInput style={s.input} value={newName} onChangeText={setNewName} placeholder="Emri" placeholderTextColor={theme.textMuted} />
-            <TextInput style={s.input} value={newPower} onChangeText={setNewPower} placeholder="Fuqia (W)" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
+            <Text style={s.modalTitle}>{editingId ? 'Edito Pajisjen' : 'Shto Pajisje'}</Text>
+            
+            <Text style={s.label}>Emri i Pajisjes</Text>
+            <TextInput style={s.input} value={newName} onChangeText={setNewName} placeholder="p.sh. Bojleri, Klima" placeholderTextColor={theme.textMuted} />
+            
+            <Text style={s.label}>Fuqia (Watt)</Text>
+            <TextInput style={s.input} value={newPower} onChangeText={setNewPower} placeholder="p.sh. 2000" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
+            
+            <Text style={s.label}>Lloji i Pajisjes</Text>
+            <View style={s.typeSelector}>
+              {[
+                { key: 'bulb', label: 'Dritë', icon: 'bulb-outline' },
+                { key: 'ac', label: 'Klimë', icon: 'snow' },
+                { key: 'tv', label: 'TV', icon: 'tv-outline' }
+              ].map(item => (
+                <TouchableOpacity
+                  key={item.key}
+                  style={[s.typeOption, newType === item.key && s.typeOptionActive]}
+                  onPress={() => setNewType(item.key)}
+                >
+                  <Ionicons name={item.icon} size={16} color={newType === item.key ? '#fff' : theme.textPrimary} />
+                  <Text style={[s.typeOptionText, newType === item.key && s.typeOptionTextActive]}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <TouchableOpacity style={s.saveBtn} onPress={ruajPajisje}><Text style={s.saveBtnText}>Ruaj</Text></TouchableOpacity>
-            <TouchableOpacity style={{ marginTop: 10, alignItems: 'center' }} onPress={() => setModalVisible(false)}><Text style={{ color: theme.textSecondary }}>Anulo</Text></TouchableOpacity>
+            <TouchableOpacity style={{ marginTop: 15, alignItems: 'center' }} onPress={() => setModalVisible(false)}><Text style={{ color: theme.textSecondary }}>Anulo</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -206,4 +291,10 @@ const styles = (theme) => StyleSheet.create({
   input: { backgroundColor: theme.background, borderRadius: 12, padding: 14, color: theme.textPrimary, marginBottom: 15, borderWidth: 1, borderColor: theme.border },
   saveBtn: { backgroundColor: theme.primary, borderRadius: 12, padding: 15, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontWeight: '800' },
+  typeSelector: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  typeOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card },
+  typeOptionActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  typeOptionText: { fontSize: 13, fontWeight: '700', color: theme.textSecondary },
+  typeOptionTextActive: { color: '#fff' },
+  label: { color: theme.textPrimary, fontSize: 13, fontWeight: '700', marginBottom: 8, marginLeft: 4 },
 });

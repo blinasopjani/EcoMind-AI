@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Alert, TextInput, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, TextInput, Modal, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { showAlert } from '../data/alertHelper';
 
 const SettingRow = ({ icon, label, sub, value, onToggle, onPress, type = 'arrow', color, theme }) => (
   <TouchableOpacity onPress={onPress} style={styles(theme).settingRow} activeOpacity={0.7}>
@@ -68,8 +69,8 @@ export default function SettingsScreen({ navigation }) {
         if (authData?.user?.email) authEmail = authData.user.email;
       } catch (_) {}
 
-      // 3. Merr të dhënat e shtëpisë
-      const houseData = await AsyncStorage.getItem('house_data');
+      // 3. Merr të dhënat e shtëpisë (me user_id prefix)
+      const houseData = await AsyncStorage.getItem(`${uid}_house_data`) || await AsyncStorage.getItem('house_data');
       const parsedHouse = houseData ? JSON.parse(houseData) : null;
 
       // 4. Statistika: nr. pajisjesh + fatura e fundit
@@ -110,19 +111,21 @@ export default function SettingsScreen({ navigation }) {
         await supabase.from('users').update({ full_name: formData.emri }).eq('id', uid);
         await AsyncStorage.setItem('user_name', formData.emri);
       } else {
-        // Ruajmë të dhënat e shtëpisë
+        // Ruajmë të dhënat e shtëpisë me user_id prefix
+        const uid = await AsyncStorage.getItem('user_id');
         const houseData = { 
           banimi: formData.banimi, 
           personat: formData.personat, 
           buxheti: formData.buxheti 
         };
-        await AsyncStorage.setItem('house_data', JSON.stringify(houseData));
+        const key = uid ? `${uid}_house_data` : 'house_data';
+        await AsyncStorage.setItem(key, JSON.stringify(houseData));
       }
       setUserData({ ...formData });
       setEditModal(false);
-      Alert.alert('Sukses', 'Të dhënat u ruajtën!');
+      showAlert('Sukses', 'Të dhënat u ruajtën!');
     } catch (e) {
-      Alert.alert('Gabim', 'Dështoi ruajtja.');
+      showAlert('Gabim', 'Dështoi ruajtja.');
     } finally {
       setLoading(false);
     }
@@ -130,19 +133,24 @@ export default function SettingsScreen({ navigation }) {
 
   const ruajBuxhetin = async () => {
     try {
-      const houseData = JSON.parse((await AsyncStorage.getItem('house_data')) || '{}');
+      const uid = await AsyncStorage.getItem('user_id');
+      const key = uid ? `${uid}_house_data` : 'house_data';
+      const houseData = JSON.parse((await AsyncStorage.getItem(key)) || (await AsyncStorage.getItem('house_data')) || '{}');
       houseData.buxheti = `${budgetVal}€`;
-      await AsyncStorage.setItem('house_data', JSON.stringify(houseData));
+      await AsyncStorage.setItem(key, JSON.stringify(houseData));
       setUserData(prev => ({ ...prev, buxheti: `${budgetVal}€` }));
       setBudgetEdit(false);
-      Alert.alert('Sukses', 'Buxheti u ruajt!');
+      showAlert('Sukses', 'Buxheti u ruajt!');
     } catch (e) {
-      Alert.alert('Gabim', 'Dështoi ruajtja e buxhetit.');
+      showAlert('Gabim', 'Dështoi ruajtja e buxhetit.');
     }
   };
 
   const logout = async () => {
-    await AsyncStorage.clear();
+    // Only clear session tokens — preserve user-keyed data (gamification, goals, house)
+    await AsyncStorage.removeItem('user_id');
+    await AsyncStorage.removeItem('user_name');
+    await supabase.auth.signOut();
     navigation.replace('Login');
   };
 
