@@ -14,14 +14,22 @@ export default function App() {
   useEffect(() => {
     async function loadFonts() {
       try {
-        // Përdorim emrat/asetet standarde të @expo/vector-icons për të gjitha
-        // platformat. Bundler-i i zgjidh vetë rrugët e fontave (pa rrugë të ngurta),
-        // dhe emrat e familjeve janë të saktë si për web ashtu edhe për native.
-        await Font.loadAsync({
-          ...Ionicons.font,
-          ...MaterialCommunityIcons.font,
-          ...FontAwesome.font,
-        });
+        if (Platform.OS === 'web') {
+          // On web, load directly from public/fonts to avoid node_modules path blocking in GitHub Pages
+          const isGitHubPages = window.location.hostname.includes('github.io');
+          const prefix = isGitHubPages ? '/EcoMind-AI/' : '/';
+          await Font.loadAsync({
+            'ionicons': `${prefix}fonts/Ionicons.ttf`,
+            'material-community': `${prefix}fonts/MaterialCommunityIcons.ttf`,
+            'FontAwesome': `${prefix}fonts/FontAwesome.ttf`,
+          });
+        } else {
+          await Font.loadAsync({
+            ...Ionicons.font,
+            ...MaterialCommunityIcons.font,
+            ...FontAwesome.font,
+          });
+        }
       } catch (e) {
         console.warn('Font loading error:', e);
       } finally {
