@@ -30,8 +30,7 @@
     "experiments": {
       "baseUrl": "/EcoMind-AI"
     },
-    "plugins": [
-      "expo-font"
-    ]
+  "assetBundlePatterns": ["**/*"],
+
   }
 }
