@@ -3,16 +3,8 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingVi
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
-import { supabase } from '../data/supabase';
+import { supabase, toEmail } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import bcrypt from 'bcryptjs';
-import * as Crypto from 'expo-crypto';
-
-// Fix for bcrypt random fallback in Expo
-bcrypt.setRandomFallback((len) => {
-  const array = Crypto.getRandomBytes(len);
-  return Array.from(array);
-});
 
 export default function RegisterScreen({ navigation }) {
   const { theme } = useTheme();
@@ -38,40 +30,44 @@ export default function RegisterScreen({ navigation }) {
 
     setLoading(true);
     try {
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('email')
-        .eq('email', email.toLowerCase().trim())
-        .maybeSingle();
+      // ✅ SIGURT: Supabase Auth menaxhon fjalëkalimin server-side.
+      // Nuk ruajmë asnjë hash në tabelën users — kolona password nuk nevojitet më.
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: toEmail(email),
+        password,
+        options: {
+          data: { full_name: name }, // ruhet si user_metadata në Supabase Auth
+        },
+      });
 
-      if (existingUser) {
-        setErrorMsg('Ky email është i regjistruar. Provoni të kyçeni.');
-        setLoading(false);
+      if (signUpError) {
+        if (signUpError.message?.includes('already registered')) {
+          setErrorMsg('Ky email është i regjistruar. Provoni të kyçeni.');
+        } else {
+          setErrorMsg(signUpError.message || 'Ndodhi një gabim gjatë regjistrimit.');
+        }
         return;
       }
 
-      // 1. Regjistrojmë përdoruesin dhe marrim ID-në e tij
-      const { data: newUser, error: insertError } = await supabase
-        .from('users')
-        .insert([
-          { 
-            full_name: name, 
-            email: email.toLowerCase().trim(), 
-            password: bcrypt.hashSync(password, 10),
-            created_at: new Date().toISOString()
-          }
-        ])
-        .select() // .select() KTHEHEN TË DHËNAT E REJA
-        .single();
+      const user = data?.user;
+      if (!user) {
+        setErrorMsg('Ndodhi një gabim gjatë regjistrimit. Provoni përsëri.');
+        return;
+      }
 
-      if (insertError) throw insertError;
-      
-      // RUANI EMRI DHE ID-NË PËR DASHBOARD
-      await AsyncStorage.setItem('user_id', newUser.id.toString());
+      // Ruajmë rreshtin shoqërues në tabelën users (pa password) për lidhjet e tjera
+      await supabase.from('users').upsert([{
+        id: user.id,           // e njëjtë me auth.uid() — RLS do ta mbrojë
+        full_name: name,
+        email: toEmail(email),
+        created_at: new Date().toISOString(),
+      }]);
+
+      await AsyncStorage.setItem('user_id', user.id);
       await AsyncStorage.setItem('user_name', name);
 
-      // 2. Kalojmë te Onboarding duke dërguar ID-në e përdoruesit
-      navigation.replace('Onboarding', { userId: newUser.id });
+      // Kalojmë te Onboarding duke dërguar ID-në e përdoruesit
+      navigation.replace('Onboarding', { userId: user.id });
 
     } catch (error) {
       console.log('Register Error:', error);

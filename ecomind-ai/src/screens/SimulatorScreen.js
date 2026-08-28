@@ -34,19 +34,18 @@ export default function SimulatorScreen() {
         .eq('user_id', uid)
         .order('created_at', { ascending: false });
 
-      if (bills && bills.length > 0) {
+      if (bills && bills.length > 0 && bills[0].amount) {
         setHasBills(true);
         setCurrentBill(bills[0].amount);
       } else {
-        // Fallback në vlerën default nëse nuk ka faturat (siç ka qenë më herët)
-        setHasBills(true);
-        setCurrentBill(47.8);
+        // Pa fatura reale — s'shpikim vlerë; tregojmë gjendje bosh
+        setHasBills(false);
+        setCurrentBill(0);
       }
     } catch (err) {
-      console.error(err);
-      // Në rast gabimi, përdorim vlerën default për të treguar rezultat
-      setHasBills(true);
-      setCurrentBill(47.8);
+      console.warn(err);
+      setHasBills(false);
+      setCurrentBill(0);
     } finally {
       setLoading(false);
       Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
@@ -67,6 +66,22 @@ export default function SimulatorScreen() {
     return (
       <View style={[s.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
+
+  if (!hasBills) {
+    return (
+      <View style={[s.container, { padding: 24, justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={s.emptyCard}>
+          <View style={s.emptyIconBox}><Ionicons name="document-text-outline" size={44} color={theme.primary} /></View>
+          <Text style={s.emptyTitle}>Asnjë faturë ende</Text>
+          <Text style={s.emptyDesc}>Shtoni së paku një faturë te seksioni "Fatura" (manualisht) që simuluesi të llogarisë kursimet mbi konsumin tuaj real.</Text>
+          <TouchableOpacity style={s.scanBtn} onPress={() => navigation.navigate('Bills')}>
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={s.scanBtnText}>Shto faturë</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -144,7 +159,7 @@ export default function SimulatorScreen() {
           </View>
 
           <View style={s.tipsCard}>
-            <Text style={s.tipsTitle}>🤖 Si ta arrish {reduction}% reduktim?</Text>
+            <Text style={s.tipsTitle}>Si ta arrish {reduction}% reduktim?</Text>
             {[
               `Fikni pajisjet në "Standby" kur nuk i përdorni.`,
               `Përdorni dritën natyrale sa më shumë gjatë ditës.`,
@@ -159,7 +174,7 @@ export default function SimulatorScreen() {
           </View>
 
           <LinearGradient colors={isDarkMode ? ['rgba(0,200,150,0.1)','rgba(26,115,232,0.05)'] : ['#fff', '#f0f9ff']} style={s.forecastCard}>
-            <Text style={s.forecastIcon}>📊</Text>
+            <Ionicons name="bar-chart" size={26} color={theme.primary} style={{ marginTop: 2 }} />
             <View style={{ flex: 1 }}>
               <Text style={s.forecastTitle}>Parashikimi AI</Text>
               <Text style={s.forecastMsg}>

@@ -7,7 +7,9 @@ import os
 class EnergyPredictor:
     def __init__(self):
         self.model = RandomForestRegressor(n_estimators=100, random_state=42)
-        self.model_path = "backend/app/core/energy_model.joblib"
+        # Store model next to this file so Docker / Railway paths always resolve correctly
+        _here = os.path.dirname(os.path.abspath(__file__))
+        self.model_path = os.path.join(_here, "energy_model.joblib")
 
     def train_initial_model(self):
         # Mock data for training (Household size, Home type, Previous Month kWh)

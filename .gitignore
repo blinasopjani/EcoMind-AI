@@ -40,3 +40,9 @@ venv/
 # Java (if backend uses it)
 target/
 *.class
+
+# EcoMind local DB & prompts
+backend/ecomind.db
+PROMPT_*.md
+_to_delete/
+

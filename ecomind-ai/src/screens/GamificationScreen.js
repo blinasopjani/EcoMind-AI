@@ -28,28 +28,43 @@ const PrizeCard = ({ title, company, points, icon, gradient, theme, userPoints, 
   );
 };
 
-const ChallengeCard = ({ id, title, sub, points, time, icon, color, theme, onStart, isCompleted }) => (
-  <View style={[styles(theme).challengeCard, isCompleted && { borderColor: theme.success, borderWidth: 1.5 }]}>
-    <View style={[styles(theme).challengeIcon, { backgroundColor: isCompleted ? theme.success + '20' : `${color}15` }]}>
-      <Ionicons name={isCompleted ? "checkmark" : icon} size={24} color={isCompleted ? theme.success : color} />
+const ChallengeCard = ({ id, title, sub, points, time, durationMs, icon, color, theme, onStart, onComplete, isCompleted, isInProgress, timeLeft }) => (
+  <View style={[styles(theme).challengeCard, isCompleted && { borderColor: theme.success, borderWidth: 1.5 }, isInProgress && !isCompleted && { borderColor: color, borderWidth: 1.5 }]}>
+    <View style={[styles(theme).challengeIcon, { backgroundColor: isCompleted ? theme.success + '20' : isInProgress ? `${color}25` : `${color}15` }]}>
+      <Ionicons name={isCompleted ? "checkmark" : isInProgress ? "timer-outline" : icon} size={24} color={isCompleted ? theme.success : color} />
     </View>
     <View style={{ flex: 1, marginLeft: 15 }}>
       <Text style={styles(theme).challengeTitle}>{title}</Text>
       <Text style={styles(theme).challengeSub}>{sub}</Text>
       <View style={styles(theme).challengeMeta}>
         <Ionicons name="time-outline" size={12} color={theme.textMuted} />
-        <Text style={styles(theme).challengeMetaText}>{time}</Text>
+        <Text style={styles(theme).challengeMetaText}>{isInProgress && timeLeft ? timeLeft : time}</Text>
         <Ionicons name="star" size={12} color="#F59E0B" style={{ marginLeft: 10 }} />
         <Text style={styles(theme).challengeMetaText}>+{points} Pikë</Text>
       </View>
+      {isInProgress && !isCompleted && (
+        <Text style={{ color: color, fontSize: 10, fontWeight: '700', marginTop: 3 }}>NË PROGRES — ështuo sfidën pastaj mërr pikët</Text>
+      )}
     </View>
-    <TouchableOpacity 
-      disabled={isCompleted}
-      onPress={() => onStart(id, points)}
-      style={[styles(theme).startBtn, { backgroundColor: isCompleted ? theme.success : color }]}
-    >
-      <Text style={styles(theme).startBtnText}>{isCompleted ? 'E kryer' : 'Fillo'}</Text>
-    </TouchableOpacity>
+    {isCompleted ? (
+      <View style={[styles(theme).startBtn, { backgroundColor: theme.success }]}>
+        <Text style={styles(theme).startBtnText}>E kryer</Text>
+      </View>
+    ) : isInProgress ? (
+      <TouchableOpacity
+        onPress={() => onComplete(id, points)}
+        style={[styles(theme).startBtn, { backgroundColor: color }]}
+      >
+        <Text style={styles(theme).startBtnText}>Mërr pikët</Text>
+      </TouchableOpacity>
+    ) : (
+      <TouchableOpacity
+        onPress={() => onStart(id, points, durationMs)}
+        style={[styles(theme).startBtn, { backgroundColor: color }]}
+      >
+        <Text style={styles(theme).startBtnText}>Fillo</Text>
+      </TouchableOpacity>
+    )}
   </View>
 );
 
@@ -61,7 +76,16 @@ export default function GamificationScreen() {
   const [points, setPoints] = useState(0);
   const [level, setLevel] = useState(1);
   const [completedChallenges, setCompletedChallenges] = useState([]);
+  // { id: string, deadline: ISO string }
+  const [inProgressChallenges, setInProgressChallenges] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(Date.now());
+
+  // Tick every 30s so timeLeft labels refresh
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     loadStats();
@@ -72,10 +96,12 @@ export default function GamificationScreen() {
       const savedPoints = await AsyncStorage.getItem('user_points');
       const savedLevel = await AsyncStorage.getItem('user_level');
       const savedChallenges = await AsyncStorage.getItem('completed_challenges');
-      
+      const savedInProgress = await AsyncStorage.getItem('in_progress_challenges');
+
       if (savedPoints) setPoints(parseInt(savedPoints));
       if (savedLevel) setLevel(parseInt(savedLevel));
       if (savedChallenges) setCompletedChallenges(JSON.parse(savedChallenges));
+      if (savedInProgress) setInProgressChallenges(JSON.parse(savedInProgress));
     } catch (e) {
       console.error(e);
     } finally {
@@ -83,35 +109,59 @@ export default function GamificationScreen() {
     }
   };
 
-  const handleStartChallenge = async (id, challengePoints) => {
+  const handleStartChallenge = async (id, challengePoints, durationMs) => {
     if (completedChallenges.includes(id)) return;
+    if (inProgressChallenges.find(c => c.id === id)) return;
 
     Alert.alert(
       "Sfidë e Re",
-      `A dëshiron të fillosh këtë sfidë për ${challengePoints} pikë?`,
+      `A dëshiron të fillosh këtë sfidë? Kur të mbarojë koha do të mërrësh ${challengePoints} pikë.`,
       [
         { text: "Anulo", style: "cancel" },
-        { 
-          text: "Prano Sfidën", 
+        {
+          text: "Fillo Sfidën",
           onPress: async () => {
-            // Simulojmë përfundimin për këtë demo, ose mund të shtohet timer
-            const newPoints = points + challengePoints;
-            const newChallenges = [...completedChallenges, id];
-            const newLevel = Math.floor(newPoints / 1000) + 1;
-
-            setPoints(newPoints);
-            setCompletedChallenges(newChallenges);
-            setLevel(newLevel);
-
-            await AsyncStorage.setItem('user_points', newPoints.toString());
-            await AsyncStorage.setItem('user_level', newLevel.toString());
-            await AsyncStorage.setItem('completed_challenges', JSON.stringify(newChallenges));
-
-            Alert.alert("Urime!", `Fitove ${challengePoints} pikë!`);
-          } 
+            const deadline = new Date(Date.now() + (durationMs || 60000)).toISOString();
+            const updated = [...inProgressChallenges, { id, deadline, points: challengePoints }];
+            setInProgressChallenges(updated);
+            await AsyncStorage.setItem('in_progress_challenges', JSON.stringify(updated));
+            Alert.alert("✅ Sfida filloi!", `Kur të përfundojë koha, kthehu dhe shtyp "Mërr pikët"!`);
+          }
         }
       ]
     );
+  };
+
+  const handleCompleteChallenge = async (id, challengePoints) => {
+    const entry = inProgressChallenges.find(c => c.id === id);
+    if (!entry) return;
+
+    const newPoints = points + challengePoints;
+    const newChallenges = [...completedChallenges, id];
+    const newLevel = Math.floor(newPoints / 1000) + 1;
+    const updatedInProgress = inProgressChallenges.filter(c => c.id !== id);
+
+    setPoints(newPoints);
+    setCompletedChallenges(newChallenges);
+    setLevel(newLevel);
+    setInProgressChallenges(updatedInProgress);
+
+    await AsyncStorage.setItem('user_points', newPoints.toString());
+    await AsyncStorage.setItem('user_level', newLevel.toString());
+    await AsyncStorage.setItem('completed_challenges', JSON.stringify(newChallenges));
+    await AsyncStorage.setItem('in_progress_challenges', JSON.stringify(updatedInProgress));
+
+    Alert.alert("🎉 Urime!", `Fitove ${challengePoints} pikë!`);
+  };
+
+  // Helper: ms left formatted
+  const getTimeLeft = (deadline) => {
+    const ms = new Date(deadline).getTime() - now;
+    if (ms <= 0) return 'Gati — mërr pikët!';
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    if (h > 0) return `${h}h ${m}m mbetur`;
+    return `${m}m mbetur`;
   };
 
   const handleRedeem = (title, cost) => {
@@ -120,14 +170,19 @@ export default function GamificationScreen() {
       `A dëshiron të shkëmbesh ${cost} pikë për "${title}"?`,
       [
         { text: "Jo", style: "cancel" },
-        { 
-          text: "Po", 
+        {
+          text: "Po",
           onPress: async () => {
             const newPoints = points - cost;
+            // Gjenerojmë një kod lokal për shpërblimin (pa premtime false për email)
+            const code = 'ECO-' + Math.random().toString(36).slice(2, 8).toUpperCase();
             setPoints(newPoints);
             await AsyncStorage.setItem('user_points', newPoints.toString());
-            Alert.alert("Sukses!", "Kodi juaj për shpërblimin u dërgua në email.");
-          } 
+            const redeemed = JSON.parse((await AsyncStorage.getItem('redeemed_rewards')) || '[]');
+            redeemed.push({ title, code, at: new Date().toISOString() });
+            await AsyncStorage.setItem('redeemed_rewards', JSON.stringify(redeemed));
+            Alert.alert("Kodi juaj i shpërblimit", `${code}\n\nRuajeni këtë kod për "${title}".`);
+          }
         }
       ]
     );
@@ -144,11 +199,11 @@ export default function GamificationScreen() {
       <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
         <View style={s.headerTop}>
           <View>
-            <Text style={s.headerTitle}>Eco Mind Play 🎮</Text>
-            <Text style={s.headerSub}>Luaj dhe fito shpërblime reale</Text>
+            <Text style={s.headerTitle}>Eco Mind Play</Text>
+            <Text style={s.headerSub}>Luaj, kurse energji dhe fito pikë</Text>
           </View>
           <View style={s.rankBadge}>
-            <Text style={s.rankText}>#{(10000 / (points + 1)).toFixed(0)} në Kosovë</Text>
+            <Text style={s.rankText}>{points >= 5000 ? 'Eco Master' : points >= 1000 ? 'Eco Warrior' : 'Fillestar'}</Text>
           </View>
         </View>
 
@@ -190,38 +245,50 @@ export default function GamificationScreen() {
             <ChallengeCard 
               id="c1"
               title="Shkyçja (Blackout)" 
-              sub="Fikni të gjitha pajisjet për 1 orë." 
-              points={500} 
-              time="1 orë" 
+              sub="Fikni të gjitha pajisjet për 1 orë."
+              points={500}
+              time="1 orë"
+              durationMs={3600000}
               icon="power" 
               color="#EF4444" 
               theme={theme} 
               onStart={handleStartChallenge}
+              onComplete={handleCompleteChallenge}
               isCompleted={completedChallenges.includes('c1')}
+              isInProgress={!!inProgressChallenges.find(c => c.id === 'c1')}
+              timeLeft={inProgressChallenges.find(c => c.id === 'c1') ? getTimeLeft(inProgressChallenges.find(c => c.id === 'c1').deadline) : null}
             />
             <ChallengeCard 
               id="c2"
               title="Eco Mode Only" 
-              sub="Përdorni rrobëlarësen vetëm në Eco." 
-              points={200} 
-              time="7 ditë" 
+              sub="Përdorni rrobëlarësen vetëm në Eco."
+              points={200}
+              time="7 ditë"
+              durationMs={604800000}
               icon="leaf" 
               color="#00C896" 
               theme={theme} 
               onStart={handleStartChallenge}
+              onComplete={handleCompleteChallenge}
               isCompleted={completedChallenges.includes('c2')}
+              isInProgress={!!inProgressChallenges.find(c => c.id === 'c2')}
+              timeLeft={inProgressChallenges.find(c => c.id === 'c2') ? getTimeLeft(inProgressChallenges.find(c => c.id === 'c2').deadline) : null}
             />
             <ChallengeCard 
               id="c3"
               title="Gatimi i Mençur" 
-              sub="Mos hapni furrën gjatë pjekjes." 
-              points={100} 
-              time="Sot" 
+              sub="Mos hapni furrën gjatë pjekjes."
+              points={100}
+              time="Sot"
+              durationMs={86400000}
               icon="restaurant" 
               color="#F59E0B" 
               theme={theme} 
               onStart={handleStartChallenge}
+              onComplete={handleCompleteChallenge}
               isCompleted={completedChallenges.includes('c3')}
+              isInProgress={!!inProgressChallenges.find(c => c.id === 'c3')}
+              timeLeft={inProgressChallenges.find(c => c.id === 'c3') ? getTimeLeft(inProgressChallenges.find(c => c.id === 'c3').deadline) : null}
             />
           </>
         )}

@@ -52,8 +52,11 @@ export default function AIInsightsScreen() {
   const generateInsights = (bills, devices) => {
     let newInsights = [];
     const lastBill = bills.length > 0 ? bills[0] : null;
-    const hasBojler = devices.some(d => d.name.toLowerCase().includes('bojler'));
-    const hasAC = devices.some(d => d.name.toLowerCase().includes('ac') || d.name.toLowerCase().includes('kondicioner'));
+    const hasBojler = devices.some(d => (d.name || '').toLowerCase().includes('bojler'));
+    const hasAC = devices.some(d => {
+      const n = (d.name || '').toLowerCase();
+      return n.includes('ac') || n.includes('kondicioner');
+    });
 
     if (lastBill) {
       if (lastBill.kwh > 500) {
@@ -112,20 +115,59 @@ export default function AIInsightsScreen() {
     fetchData();
   }, []);
 
+  // Asistent i thjeshtë rregull-bazuar që përgjigjet nga të dhënat REALE të përdoruesit
+  const getAiReply = (qRaw) => {
+    const q = (qRaw || '').toLowerCase();
+    const bills = data.bills || [];
+    const devices = data.devices || [];
+    const last = bills[0];
+    const topDevice = devices
+      .map(d => ({ name: d.name || 'Pajisje', w: d.avg_consumption || 0 }))
+      .sort((a, b) => b.w - a.w)[0];
+
+    if (q.includes('konsum') || q.includes('harxh') || q.includes('kwh') || q.includes('sa ')) {
+      if (last) return `Fatura juaj e fundit ishte ${last.kwh || 0} kWh (${last.amount || 0}€).` + (bills.length > 1 ? ` Faturën e mëparshme e kishit ${bills[1].kwh || 0} kWh.` : '');
+      return 'Ende s\'keni shtuar një faturë. Shtoni një që të analizoj konsumin tuaj real.';
+    }
+    if (q.includes('fatur') || q.includes('kosto') || q.includes('para') || q.includes('euro') || q.includes('€')) {
+      if (last) {
+        let t = `Fatura e fundit: ${last.amount || 0}€ për ${last.kwh || 0} kWh.`;
+        if (bills.length > 1 && bills[1].amount) {
+          const diff = Math.round(((last.amount - bills[1].amount) / bills[1].amount) * 100);
+          t += diff > 0 ? ` Kjo është ${diff}% më shumë se e mëparshmja.` : ` Kjo është ${Math.abs(diff)}% më pak se e mëparshmja — bravo!`;
+        }
+        return t;
+      }
+      return 'S\'kam ende një faturë për të treguar. Shtoni faturën tuaj të parë.';
+    }
+    if (q.includes('kurs') || q.includes('reduk') || q.includes('ul ') || q.includes('si t')) {
+      if (topDevice && topDevice.w > 0) return `Pajisja juaj më harxhuese është "${topDevice.name}" (${topDevice.w} W). Shmangeni në orët e pikut 18:00–22:00 — mund të kurseni 10–15%.`;
+      return 'Shtoni pajisjet tuaja që t\'ju them saktësisht cila harxhon më shumë dhe si të kurseni.';
+    }
+    if (q.includes('pajisje') || q.includes('device')) {
+      if (devices.length === 0) return 'Ende s\'keni shtuar pajisje. Shkoni te "Pajisjet" për t\'i regjistruar.';
+      return `Keni ${devices.length} pajisje të regjistruara.` + (topDevice && topDevice.w > 0 ? ` Më harxhuesja: "${topDevice.name}" (${topDevice.w} W).` : '');
+    }
+    if (q.includes('përsh') || q.includes('tung') || q.includes('hello') || q.includes('hi')) {
+      return 'Përshëndetje! Pyetni për konsumin, faturën, pajisjet ose si të kurseni — përgjigjem nga të dhënat tuaja reale.';
+    }
+    if (last || devices.length > 0) {
+      return `Ja çka di për ju: ${last ? `fatura e fundit ${last.amount || 0}€ / ${last.kwh || 0} kWh` : 'ende pa faturë'}, ${devices.length} pajisje. Provoni: "si të kursej?" ose "sa harxhoj?".`;
+    }
+    return 'Shtoni faturat dhe pajisjet tuaja që të mund t\'ju jap këshilla reale bazuar në to.';
+  };
+
   const sendMessage = () => {
     if (message.trim() === '') return;
-    const userMsg = { id: Date.now(), text: message, sender: 'user' };
-    setChatHistory([...chatHistory, userMsg]);
+    const q = message;
+    const userMsg = { id: Date.now(), text: q, sender: 'user' };
+    setChatHistory(prev => [...prev, userMsg]);
     setMessage('');
 
     setTimeout(() => {
-      let response = "Nuk kam të dhëna të mjaftueshme për t'ju përgjigjur saktë. Ju lutem shtoni pajisjet tuaja.";
-      if (data.devices.length > 0) {
-        response = `Duke parë që keni ${data.devices.length} pajisje, ju sugjeroj të kontrolloni nëse keni ndonjë që qëndron ndezur pa nevojë gjatë natës.`;
-      }
-      const aiResponse = { id: Date.now() + 1, text: response, sender: 'ai' };
+      const aiResponse = { id: Date.now() + 1, text: getAiReply(q), sender: 'ai' };
       setChatHistory(prev => [...prev, aiResponse]);
-    }, 1000);
+    }, 600);
   };
 
   return (

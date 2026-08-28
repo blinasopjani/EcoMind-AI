@@ -43,7 +43,6 @@ export default function DevicesScreen() {
   const [newName, setNewName] = useState('');
   const [newPower, setNewPower] = useState('');
   const [userId, setUserId] = useState(null);
-  const [debugLog, setDebugLog] = useState('');
 
   useEffect(() => {
     const getUserId = async () => {
@@ -58,7 +57,6 @@ export default function DevicesScreen() {
 
   const fetchDevices = async (uid) => {
     setLoading(true);
-    setDebugLog('Duke kërkuar pajisjet tuaja...');
     try {
       const { data, error } = await supabase
         .from('devices')
@@ -74,10 +72,9 @@ export default function DevicesScreen() {
           power: d.avg_consumption || d.power || 0,
           status: false
         })));
-        setDebugLog(`Gjeta ${data.length} pajisje për llogarinë tuaj.`);
       }
     } catch (err) {
-      setDebugLog('Error: ' + err.message);
+      Alert.alert('Gabim', 'Nuk u arritën të ngarkohen pajisjet. Provoni përsëri.');
     } finally {
       setLoading(false);
     }
@@ -85,11 +82,18 @@ export default function DevicesScreen() {
 
   const ruajPajisje = async () => {
     if (!newName.trim() || !newPower.trim() || !userId) return;
+
+    const power = parseInt(newPower, 10);
+    if (isNaN(power) || power < 0) {
+      Alert.alert('Gabim', 'Fuqia duhet të jetë një numër i vlefshëm (W).');
+      return;
+    }
+
     setLoading(true);
     try {
-      const payload = { 
-        name: newName.trim(), 
-        avg_consumption: parseInt(newPower),
+      const payload = {
+        name: newName.trim(),
+        avg_consumption: power,
         user_id: userId // SAVE USER ID
       };
 
@@ -158,9 +162,6 @@ export default function DevicesScreen() {
             </>
           )}
 
-          <View style={s.debugPanel}>
-            <Text style={s.debugText}>{debugLog}</Text>
-          </View>
           <View style={{ height: 100 }} />
         </View>
       </ScrollView>
@@ -205,6 +206,4 @@ const styles = (theme) => StyleSheet.create({
   input: { backgroundColor: theme.background, borderRadius: 12, padding: 14, color: theme.textPrimary, marginBottom: 15, borderWidth: 1, borderColor: theme.border },
   saveBtn: { backgroundColor: theme.primary, borderRadius: 12, padding: 15, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontWeight: '800' },
-  debugPanel: { marginTop: 30, padding: 10, backgroundColor: '#000', borderRadius: 8 },
-  debugText: { color: '#0f0', fontSize: 10, fontFamily: 'monospace' },
 });

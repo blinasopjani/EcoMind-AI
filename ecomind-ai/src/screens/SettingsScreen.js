@@ -41,6 +41,10 @@ export default function SettingsScreen({ navigation }) {
     personat: '1 person',
     buxheti: '50€'
   });
+  const [stats, setStats] = useState({ deviceCount: 0, lastBill: null });
+  const [redeemedRewards, setRedeemedRewards] = useState([]);
+  const [budgetEdit, setBudgetEdit] = useState(false);
+  const [budgetVal, setBudgetVal] = useState('');
 
   const [editModal, setEditModal] = useState(false);
   const [editType, setEditType] = useState('profil');
@@ -54,20 +58,43 @@ export default function SettingsScreen({ navigation }) {
         return;
       }
 
-      // 1. Merr të dhënat e regjistrimit nga Supabase
-      const { data: user } = await supabase.from('users').select('*').eq('id', uid).single();
-      
-      // 2. Merr të dhënat e shtëpisë (nga AsyncStorage ose Supabase)
+      // 1. Merr emrin nga tabela users
+      const { data: user } = await supabase.from('users').select('full_name, email').eq('id', uid).single();
+
+      // 2. Merr email-in real nga Supabase Auth (i konfirmuar)
+      let authEmail = user?.email || '';
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user?.email) authEmail = authData.user.email;
+      } catch (_) {}
+
+      // 3. Merr të dhënat e shtëpisë
       const houseData = await AsyncStorage.getItem('house_data');
       const parsedHouse = houseData ? JSON.parse(houseData) : null;
+
+      // 4. Statistika: nr. pajisjesh + fatura e fundit
+      const { data: devicesData } = await supabase.from('devices').select('id').eq('user_id', uid);
+      const { data: billsData } = await supabase.from('bills').select('amount, kwh, created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(1);
+
+      // 5. Shpërblimet e fituara
+      const redeemed = JSON.parse((await AsyncStorage.getItem('redeemed_rewards')) || '[]');
+      setRedeemedRewards(redeemed);
+
+      setStats({
+        deviceCount: devicesData?.length || 0,
+        lastBill: billsData?.[0] || null,
+      });
+
+      const buxheti = parsedHouse?.buxheti || '50€';
+      setBudgetVal(buxheti.replace(/[^0-9]/g, ''));
 
       if (user) {
         setUserData({
           emri: user.full_name || 'Pa emër',
-          email: user.email || 'Pa email',
+          email: authEmail || 'Pa email',
           banimi: parsedHouse?.banimi || 'Apartament — 85m²',
           personat: parsedHouse?.personat || '4 persona',
-          buxheti: parsedHouse?.buxheti || '60€'
+          buxheti,
         });
       }
       setLoading(false);
@@ -98,6 +125,19 @@ export default function SettingsScreen({ navigation }) {
       Alert.alert('Gabim', 'Dështoi ruajtja.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const ruajBuxhetin = async () => {
+    try {
+      const houseData = JSON.parse((await AsyncStorage.getItem('house_data')) || '{}');
+      houseData.buxheti = `${budgetVal}€`;
+      await AsyncStorage.setItem('house_data', JSON.stringify(houseData));
+      setUserData(prev => ({ ...prev, buxheti: `${budgetVal}€` }));
+      setBudgetEdit(false);
+      Alert.alert('Sukses', 'Buxheti u ruajt!');
+    } catch (e) {
+      Alert.alert('Gabim', 'Dështoi ruajtja e buxhetit.');
     }
   };
 
@@ -139,10 +179,30 @@ export default function SettingsScreen({ navigation }) {
           </LinearGradient>
         </LinearGradient>
 
-        <View style={s.body}>
+          <View style={s.body}>
+          
+          {/* Statistika përmbledhëse */}
+          <View style={s.statsRow}>
+            <View style={s.statCard}>
+              <Ionicons name="hardware-chip-outline" size={22} color={theme.primary} />
+              <Text style={s.statNum}>{stats.deviceCount}</Text>
+              <Text style={s.statLblSm}>Pajisje</Text>
+            </View>
+            <View style={s.statCard}>
+              <Ionicons name="wallet-outline" size={22} color="#F59E0B" />
+              <Text style={s.statNum}>{stats.lastBill ? `${stats.lastBill.amount}€` : '—'}</Text>
+              <Text style={s.statLblSm}>Fatura e fundit</Text>
+            </View>
+            <View style={s.statCard}>
+              <Ionicons name="gift-outline" size={22} color="#8B5CF6" />
+              <Text style={s.statNum}>{redeemedRewards.length}</Text>
+              <Text style={s.statLblSm}>Shpërblime</Text>
+            </View>
+          </View>
+
           <View style={s.section}>
             <View style={s.sectionHeader}>
-              <Text style={s.sectionTitle}>🏠 Shtëpia Ime</Text>
+              <Text style={s.sectionTitle}>Shtëpia Ime</Text>
               <TouchableOpacity onPress={() => { setEditType('shtepi'); setFormData({...userData}); setEditModal(true); }}>
                 <Text style={s.editLink}>Ndrysho</Text>
               </TouchableOpacity>
@@ -150,12 +210,60 @@ export default function SettingsScreen({ navigation }) {
             <View style={s.card}>
               <SettingRow icon="home" label="Lloji & Madhësia" sub={userData.banimi} color={theme.info} theme={theme} />
               <SettingRow icon="people" label="Familja" sub={userData.personat} color={theme.primary} theme={theme} />
-              <SettingRow icon="cash" label="Buxheti i Synuar" sub={userData.buxheti} color={theme.warning} theme={theme} />
+              {/* Buxheti i editueshëm inline */}
+              <View style={s.settingRow}>
+                <View style={[s.settingIcon, { backgroundColor: theme.warning + '18' }]}>
+                  <Ionicons name="cash" size={20} color={theme.warning} />
+                </View>
+                <View style={s.settingInfo}>
+                  <Text style={s.settingLabel}>Buxheti i Synuar</Text>
+                  {budgetEdit ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                      <TextInput
+                        style={[s.budgetInput]}
+                        value={budgetVal}
+                        onChangeText={setBudgetVal}
+                        keyboardType="numeric"
+                        autoFocus
+                      />
+                      <Text style={{ color: theme.textSecondary }}>€/muaj</Text>
+                      <TouchableOpacity onPress={ruajBuxhetin} style={s.budgetSaveBtn}>
+                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>Ruaj</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <Text style={s.settingSub}>{userData.buxheti}/muaj</Text>
+                  )}
+                </View>
+                <TouchableOpacity onPress={() => setBudgetEdit(!budgetEdit)}>
+                  <Ionicons name={budgetEdit ? 'close' : 'pencil-outline'} size={18} color={theme.textMuted} />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
+          {/* Shpërblimet e fituara */}
+          {redeemedRewards.length > 0 && (
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Shpërblimet e Fituara</Text>
+              <View style={s.card}>
+                {redeemedRewards.slice(-3).reverse().map((r, i) => (
+                  <View key={i} style={[s.settingRow, { borderBottomWidth: i < Math.min(redeemedRewards.length, 3) - 1 ? 1 : 0, borderBottomColor: theme.border }]}>
+                    <View style={[s.settingIcon, { backgroundColor: '#8B5CF618' }]}>
+                      <Ionicons name="gift" size={20} color="#8B5CF6" />
+                    </View>
+                    <View style={s.settingInfo}>
+                      <Text style={s.settingLabel}>{r.title}</Text>
+                      <Text style={s.settingSub}>Kodi: {r.code}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
           <View style={s.section}>
-            <Text style={s.sectionTitle}>⚙️ Preferencat</Text>
+            <Text style={s.sectionTitle}>Preferencat</Text>
             <View style={s.card}>
               <SettingRow icon="moon" label="Mënyra e Errët" type="toggle" value={isDarkMode} onToggle={toggleTheme} color={theme.accent3} theme={theme} />
               <SettingRow icon="notifications" label="Njoftimet" type="toggle" value={notifications} onToggle={setNotifications} color={theme.primary} theme={theme} />
@@ -212,7 +320,11 @@ const styles = (theme) => StyleSheet.create({
   profileEmail: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4 },
   editBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   body: { padding: 24 },
-  section: { marginBottom: 30 },
+  statsRow: { flexDirection: 'row', gap: 12, marginBottom: 28 },
+  statCard: { flex: 1, backgroundColor: theme.card, borderRadius: 18, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: theme.border },
+  statNum: { color: theme.textPrimary, fontSize: 18, fontWeight: '900', marginVertical: 4 },
+  statLblSm: { color: theme.textSecondary, fontSize: 10, fontWeight: '600', textAlign: 'center' },
+  section: { marginBottom: 28 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   sectionTitle: { color: theme.textPrimary, fontSize: 16, fontWeight: '700' },
   editLink: { color: theme.primary, fontSize: 13, fontWeight: '700' },
@@ -222,6 +334,8 @@ const styles = (theme) => StyleSheet.create({
   settingInfo: { flex: 1 },
   settingLabel: { color: theme.textPrimary, fontSize: 14, fontWeight: '600' },
   settingSub: { color: theme.textSecondary, fontSize: 11, marginTop: 2 },
+  budgetInput: { borderWidth: 1, borderColor: theme.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, color: theme.textPrimary, fontSize: 14, minWidth: 60 },
+  budgetSaveBtn: { backgroundColor: theme.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 20, padding: 15, borderRadius: 15, borderWidth: 1, borderColor: '#EF444420' },
   logoutText: { color: '#EF4444', fontSize: 15, fontWeight: '700' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 },

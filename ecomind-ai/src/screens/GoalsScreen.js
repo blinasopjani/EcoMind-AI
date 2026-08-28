@@ -7,7 +7,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../data/supabase';
 
 const GoalCard = ({ title, current, target, unit, color, icon, theme }) => {
-  const progress = Math.min(100, (current / target) * 100);
+  // Objektiv reduktimi: sa më afër (nga lart) të jetë konsumi aktual me objektivin,
+  // aq më i lartë progresi. Nëse s'ka të dhëna reale (current=0), progresi është 0.
+  const progress = current > 0 && target > 0 ? Math.min(100, (target / current) * 100) : 0;
   return (
     <View style={styles(theme).goalCard}>
       <View style={styles(theme).goalHeader}>
@@ -39,19 +41,42 @@ export default function GoalsScreen({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [newGoal, setNewGoal] = useState({ title: '', target: '', unit: 'kWh' });
   const [aiGenerating, setAiGenerating] = useState(false);
+  // Konsumi real nga fatura e fundit — përdoret për të llogaritur progresin
+  const [consumption, setConsumption] = useState({ kwh: 0, amount: 0 });
 
   useEffect(() => {
     loadGoals();
   }, []);
 
+  // Vendos 'current' të çdo objektivi nga konsumi real sipas njësisë
+  const applyCurrent = (list, cons) => list.map(g => ({
+    ...g,
+    current: g.unit === '€' ? cons.amount : cons.kwh,
+  }));
+
   const loadGoals = async () => {
     try {
       const savedGoals = await AsyncStorage.getItem('user_goals');
-      if (savedGoals) {
-        setGoals(JSON.parse(savedGoals));
+      let parsed = savedGoals ? JSON.parse(savedGoals) : [];
+
+      // Merr konsumin real nga fatura e fundit e përdoruesit
+      const uid = await AsyncStorage.getItem('user_id');
+      let cons = { kwh: 0, amount: 0 };
+      if (uid) {
+        const { data: bills } = await supabase
+          .from('bills')
+          .select('kwh, amount')
+          .eq('user_id', uid)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (bills && bills.length > 0) {
+          cons = { kwh: bills[0].kwh || 0, amount: bills[0].amount || 0 };
+        }
       }
+      setConsumption(cons);
+      setGoals(applyCurrent(parsed, cons));
     } catch (e) {
-      console.error(e);
+      console.warn(e);
     } finally {
       setLoading(false);
     }
@@ -72,7 +97,7 @@ export default function GoalsScreen({ navigation }) {
       id: Date.now(),
       title: newGoal.title,
       target: parseFloat(newGoal.target),
-      current: 0,
+      current: newGoal.unit === '€' ? consumption.amount : consumption.kwh,
       unit: newGoal.unit,
       color: theme.primary,
       icon: 'star'
@@ -89,23 +114,27 @@ export default function GoalsScreen({ navigation }) {
       const uid = await AsyncStorage.getItem('user_id');
       const { data: bills } = await supabase.from('bills').select('*').eq('user_id', uid).order('created_at', { ascending: false }).limit(1);
       
-      let lastKwh = 300;
-      if (bills && bills.length > 0) lastKwh = bills[0].kwh;
+      if (!bills || bills.length === 0) {
+        Alert.alert('Mungojnë të dhënat', 'Shtoni së paku një faturë që AI të krijojë një objektiv real bazuar në konsumin tuaj.');
+        setAiGenerating(false);
+        return;
+      }
 
-      const suggestedTarget = Math.round(lastKwh * 0.85); // 15% reduction
-      
+      const lastKwh = bills[0].kwh || 0;
+      const suggestedTarget = Math.round(lastKwh * 0.85); // 15% reduktim
+
       const aiGoal = {
         id: Date.now(),
         title: `Reduktimi i konsumit (AI Sugjerim)`,
         target: suggestedTarget,
-        current: 0,
+        current: lastKwh,
         unit: 'kWh',
         color: '#8B5CF6',
         icon: 'bulb'
       };
 
       saveGoals([...goals, aiGoal]);
-      Alert.alert("AI Sugjerim", `Bazuar në shpenzimet tuaja, kemi krijuar një objektiv për të reduktuar konsumin në ${suggestedTarget} kWh.`);
+      Alert.alert("AI Sugjerim", `Bazuar në faturën tuaj të fundit (${lastKwh} kWh), krijuam një objektiv për ta ulur konsumin në ${suggestedTarget} kWh (−15%).`);
     } catch (e) {
       Alert.alert("Gabim", "Dështoi gjenerimi me AI.");
     } finally {

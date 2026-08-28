@@ -3,15 +3,8 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, KeyboardAvo
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
-import { supabase } from '../data/supabase';
+import { supabase, toEmail } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import bcrypt from 'bcryptjs';
-import * as Crypto from 'expo-crypto';
-
-bcrypt.setRandomFallback((len) => {
-  const array = Crypto.getRandomBytes(len);
-  return Array.from(array);
-});
 
 export default function LoginScreen({ navigation }) {
   const { theme, isDarkMode } = useTheme();
@@ -32,50 +25,36 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
-      const { data: user, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email.toLowerCase().trim())
-        .maybeSingle();
+      // ✅ SIGURT: Supabase Auth validimon fjalëkalimin server-side.
+      // Asnjë rresht nga tabela users nuk ekspozohet te klienti.
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: toEmail(email),
+        password,
+      });
 
-      if (userError) throw userError;
-
-      if (!user) {
-        setErrorMsg('Kjo llogari nuk ekziston. Ju lutem regjistrohuni.');
-        setLoading(false);
-        return;
-      }
-
-      const isHashed = user.password.startsWith('$2a$') || user.password.startsWith('$2b$');
-      let passwordMatch = false;
-
-      if (isHashed) {
-        passwordMatch = bcrypt.compareSync(password, user.password);
-      } else {
-        // Migration check: if not hashed, check plain text
-        passwordMatch = user.password === password;
-        
-        // If plain text matches, hash it now for future safety
-        if (passwordMatch) {
-          const hashedPassword = bcrypt.hashSync(password, 10);
-          await supabase.from('users').update({ password: hashedPassword }).eq('id', user.id);
+      if (error) {
+        // Supabase kthen 'Invalid login credentials' për email/password të gabuar
+        if (error.message?.includes('Invalid login credentials')) {
+          setErrorMsg('Email ose fjalëkalimi është i gabuar. Provoni përsëri.');
+        } else {
+          setErrorMsg(error.message || 'Ndodhi një gabim gjatë hyrjes.');
         }
-      }
-
-      if (!passwordMatch) {
-        setErrorMsg('Fjalëkalimi është i gabuar. Provoni përsëri.');
-        setLoading(false);
         return;
       }
 
-      // RUANI ID-NË E PËRDORUESIT PËR MULTI-USER SUPPORT
-      await AsyncStorage.setItem('user_id', user.id.toString());
-      await AsyncStorage.setItem('user_name', user.full_name || '');
+      const user = data?.user;
+      if (!user) {
+        setErrorMsg('Kjo llogari nuk u gjet. Ju lutem regjistrohuni.');
+        return;
+      }
 
-      // Shko direkt në Dashboard (Onboarding shfaqet vetëm te regjistrimi i ri)
+      // Ruajmë ID-në dhe emrin (meta_data nga Supabase Auth) në AsyncStorage
+      await AsyncStorage.setItem('user_id', user.id);
+      await AsyncStorage.setItem('user_name', user.user_metadata?.full_name || user.email || '');
+
+      // Shko direkt në Dashboard
       navigation.replace('Main');
     } catch (error) {
-
       console.error('Login Error:', error);
       setErrorMsg('Ndodhi një gabim gjatë hyrjes.');
     } finally {

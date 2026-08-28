@@ -9,6 +9,10 @@ from .models import models
 from .core.database import engine, get_db
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from passlib.context import CryptContext
+
+# Konteksti për hash-imin e fjalëkalimeve (bcrypt)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class UserRegister(BaseModel):
     full_name: str
@@ -26,9 +30,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Only allow the GitHub Pages frontend (and localhost for local dev).
+# Do NOT use allow_origins=["*"] together with allow_credentials=True —
+# browsers block such responses.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://blinasopjani.github.io",
+        "http://localhost:8081",
+        "http://localhost:19006",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,6 +48,11 @@ app.add_middleware(
 @app.get("/")
 async def root():
     return {"message": "Welcome to EcoMind AI+ Kosovo API"}
+
+@app.get("/health")
+async def health():
+    """Railway / uptime-robot health-check endpoint."""
+    return {"status": "ok"}
 
 @app.post("/predict")
 async def predict_usage(household_size: int, home_type: str, last_kwh: float):
@@ -82,7 +98,7 @@ async def register_user(user: UserRegister, db: Session = Depends(get_db)):
         new_user = models.User(
             full_name=user.full_name,
             email=user.email,
-            hashed_password=user.password
+            hashed_password=pwd_context.hash(user.password)
         )
         db.add(new_user)
         db.commit()

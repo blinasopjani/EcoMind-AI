@@ -5,14 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
+import { computeKescoBill, estimateMonthlyKwhFromDevices } from '../data/kescoTariff';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import bcrypt from 'bcryptjs';
-import * as Crypto from 'expo-crypto';
-
-bcrypt.setRandomFallback((len) => {
-  const array = Crypto.getRandomBytes(len);
-  return Array.from(array);
-});
 
 const { width } = Dimensions.get('window');
 
@@ -76,10 +70,15 @@ export default function DashboardScreen({ navigation }) {
       const budgetEuro = houseData ? parseInt(houseData.buxheti.replace(/[^0-9]/g, '')) : 50;
       const targetKwh = Math.round(budgetEuro / 0.07) || 400;
 
-      let lastKwh = 0, lastAmount = 0;
+      let lastKwh = 0, lastAmount = 0, estimated = false;
       if (bills && bills.length > 0) {
         lastKwh = bills[0].kwh || 0;
         lastAmount = bills[0].amount || 0;
+      } else if (devices && devices.length > 0) {
+        // Pa faturë: vlerësojmë konsumin/koston nga pajisjet e regjistruara
+        lastKwh = estimateMonthlyKwhFromDevices(devices);
+        lastAmount = computeKescoBill(lastKwh, 0).total;
+        estimated = true;
       }
 
       setStats({
@@ -90,7 +89,8 @@ export default function DashboardScreen({ navigation }) {
         activeDevices: devices ? devices.length : 0,
         treesSaved: Math.floor(lastKwh / 50),
         targetKwh: targetKwh,
-        targetEuro: budgetEuro
+        targetEuro: budgetEuro,
+        estimated,
       });
     } catch (e) {
       console.log(e);
@@ -100,30 +100,8 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  const migratePasswords = async () => {
-    try {
-      // Fetch users who likely have plaintext passwords (not starting with $2)
-      const { data: users } = await supabase
-        .from('users')
-        .select('id, password');
-
-      if (users) {
-        for (const user of users) {
-          if (user.password && !user.password.startsWith('$2')) {
-            const salt = bcrypt.genSaltSync(10);
-            const hashedPassword = bcrypt.hashSync(user.password, salt);
-            await supabase.from('users').update({ password: hashedPassword }).eq('id', user.id);
-          }
-        }
-      }
-    } catch (e) {
-      console.log('Migration error:', e);
-    }
-  };
-
-  useEffect(() => { 
-    fetchData(); 
-    migratePasswords(); // Run migration check
+  useEffect(() => {
+    fetchData();
   }, []);
 
   return (
@@ -135,7 +113,7 @@ export default function DashboardScreen({ navigation }) {
           <SafeAreaSpacer />
           <View style={s.headerRow}>
             <View>
-              <Text style={s.heroGreeting}>Mirë se vini, {userName}! 👋</Text>
+              <Text style={s.heroGreeting}>Mirë se vini{userName ? `, ${userName}` : ''}</Text>
               <Text style={s.heroBrand}>EcoMind AI+</Text>
             </View>
             <TouchableOpacity style={s.profileBtn} onPress={() => navigation.navigate('More', { screen: 'Settings' })}>
@@ -146,7 +124,7 @@ export default function DashboardScreen({ navigation }) {
           <Animated.View style={[s.mainCard, { opacity: fadeAnim }]}>
             <View style={s.cardTop}>
               <View>
-                <Text style={s.cardLabel}>KONSUMI JUAJ</Text>
+                <Text style={s.cardLabel}>{stats.estimated ? 'KONSUMI (VLERËSIM)' : 'KONSUMI JUAJ'}</Text>
                 <Text style={s.cardValue}>{stats.totalUsage} <Text style={s.cardUnit}>kWh</Text></Text>
               </View>
               <View style={s.cardBadge}>
@@ -162,6 +140,7 @@ export default function DashboardScreen({ navigation }) {
               <Text style={s.progressLabelText}>Synimi: {stats.targetKwh} kWh ({stats.targetEuro}€)</Text>
               <Text style={s.progressLabelText}>{Math.min(100, Math.round((stats.totalUsage / stats.targetKwh) * 100))}%</Text>
             </View>
+            {stats.estimated ? <Text style={s.estNote}>Vlerësim nga pajisjet tuaja — shto një faturë për shifra të sakta.</Text> : null}
           </Animated.View>
         </LinearGradient>
 
@@ -178,7 +157,7 @@ export default function DashboardScreen({ navigation }) {
             <View style={s.statBox}>
               <Ionicons name="wallet-outline" size={20} color={theme.primary} />
               <Text style={s.statVal}>{stats.monthlyBill} €</Text>
-              <Text style={s.statLbl}>Fatura fundit</Text>
+              <Text style={s.statLbl}>{stats.estimated ? 'Fatura (vlerësim)' : 'Fatura fundit'}</Text>
             </View>
             <View style={s.statBox}>
               <Ionicons name="apps-outline" size={20} color="#10B981" />
@@ -228,6 +207,7 @@ const styles = (theme) => StyleSheet.create({
   progressBarFill: { height: '100%', borderRadius: 5 },
   progressLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   progressLabelText: { color: theme.textMuted, fontSize: 11, fontWeight: '600' },
+  estNote: { color: theme.textMuted, fontSize: 10, marginTop: 10, fontStyle: 'italic' },
   body: { paddingHorizontal: 24, marginTop: 25 },
   actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 30 },
   actionCard: { alignItems: 'center', flex: 1 },

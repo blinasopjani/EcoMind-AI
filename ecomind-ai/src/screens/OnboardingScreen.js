@@ -31,11 +31,22 @@ export default function OnboardingScreen({ navigation, route }) {
     monthlyBudget: ''
   });
 
-  // Step 2: Device Data
-  const [device, setDevice] = useState({
-    name: '',
-    power: ''
-  });
+  // Step 2: Devices list (multi-device)
+  const [devices, setDevices] = useState([]);
+  const [deviceDraft, setDeviceDraft] = useState({ name: '', power: '' });
+
+  const addDevice = () => {
+    if (!deviceDraft.name.trim() || !deviceDraft.power.trim()) {
+      Alert.alert('Kujdes', 'Plotëso emrin dhe fuqinë e pajisjes.');
+      return;
+    }
+    setDevices([...devices, { ...deviceDraft }]);
+    setDeviceDraft({ name: '', power: '' });
+  };
+
+  const removeDevice = (idx) => {
+    setDevices(devices.filter((_, i) => i !== idx));
+  };
 
   const handleNext = async () => {
     if (step === 1) {
@@ -45,7 +56,7 @@ export default function OnboardingScreen({ navigation, route }) {
       }
       setStep(2);
     } else if (step === 2) {
-      if (!device.name || !device.power) {
+      if (devices.length === 0) {
         Alert.alert('Kujdes', 'Shtoni të paktën një pajisje për të vazhduar.');
         return;
       }
@@ -68,16 +79,16 @@ export default function OnboardingScreen({ navigation, route }) {
       };
       await AsyncStorage.setItem('house_data', JSON.stringify(houseData));
       
-      // 2. Save Device to Supabase
-      if (device.name && device.power) {
-        await supabase.from('devices').insert([
-          { 
-            name: device.name, 
-            avg_consumption: parseInt(device.power), 
-            user_id: userId,
-            status: 'on'
-          }
-        ]);
+      // 2. Save all devices to Supabase (batch insert)
+      if (devices.length > 0 && userId) {
+        const rows = devices.map(d => ({
+          name: d.name,
+          avg_consumption: parseInt(d.power, 10) || 0,
+          user_id: userId,
+          type: 'other',
+          status: 'on',
+        }));
+        await supabase.from('devices').insert(rows);
       }
 
       // 3. Mark Onboarding as Complete
@@ -100,7 +111,7 @@ export default function OnboardingScreen({ navigation, route }) {
       case 1:
         return (
           <View style={s.stepContent}>
-            <Text style={s.stepTitle}>👤 Përshëndetje{userName ? `, ${userName}` : ''}!</Text>
+            <Text style={s.stepTitle}>Përshëndetje{userName ? `, ${userName}` : ''}!</Text>
             <Text style={s.stepSub}>Na tregoni pak për veten dhe ambientin ku jetoni.</Text>
 
             <View style={s.inputGroup}>
@@ -152,19 +163,31 @@ export default function OnboardingScreen({ navigation, route }) {
       case 2:
         return (
           <View style={s.stepContent}>
-            <Text style={s.stepTitle}>🔌 Pajisja e Parë</Text>
-            <Text style={s.stepSub}>Shtoni një pajisje që dëshironi ta monitoroni (p.sh. Frigoriferi).</Text>
+            <Text style={s.stepTitle}>Pajisjet e Tua</Text>
+            <Text style={s.stepSub}>Shto pajisjet që dëshiron t'i monitorosh. Mund të shtosh sa të duash.</Text>
 
-            <View style={s.inputGroup}>
+            {/* Lista e pajisjes të shtuara */}
+            {devices.map((d, idx) => (
+              <View key={idx} style={s.deviceRow}>
+                <Ionicons name="flash" size={18} color={theme.primary} />
+                <Text style={s.deviceRowText}>{d.name} — {d.power}W</Text>
+                <TouchableOpacity onPress={() => removeDevice(idx)}>
+                  <Ionicons name="close-circle" size={22} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            ))}
+
+            {/* Formular për pajisje të re */}
+            <View style={[s.inputGroup, { marginTop: devices.length > 0 ? 16 : 0 }]}>
               <Text style={s.label}>Emri i pajisjes</Text>
               <View style={s.inputWrapper}>
                 <Ionicons name="extension-puzzle-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
-                <TextInput 
-                  style={s.input} 
-                  placeholder="p.sh. Kondicioneri" 
-                  placeholderTextColor={theme.textMuted} 
-                  value={device.name} 
-                  onChangeText={(v) => setDevice({...device, name: v})}
+                <TextInput
+                  style={s.input}
+                  placeholder="p.sh. Kondicioneri"
+                  placeholderTextColor={theme.textMuted}
+                  value={deviceDraft.name}
+                  onChangeText={(v) => setDeviceDraft({ ...deviceDraft, name: v })}
                 />
               </View>
             </View>
@@ -173,22 +196,27 @@ export default function OnboardingScreen({ navigation, route }) {
               <Text style={s.label}>Fuqia (Watt)</Text>
               <View style={s.inputWrapper}>
                 <Ionicons name="flash-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
-                <TextInput 
-                  style={s.input} 
-                  placeholder="p.sh. 1500" 
-                  placeholderTextColor={theme.textMuted} 
-                  value={device.power} 
-                  onChangeText={(v) => setDevice({...device, power: v})}
+                <TextInput
+                  style={s.input}
+                  placeholder="p.sh. 1500"
+                  placeholderTextColor={theme.textMuted}
+                  value={deviceDraft.power}
+                  onChangeText={(v) => setDeviceDraft({ ...deviceDraft, power: v })}
                   keyboardType="numeric"
                 />
               </View>
             </View>
+
+            <TouchableOpacity style={s.addDeviceBtn} onPress={addDevice}>
+              <Ionicons name="add-circle-outline" size={20} color="#fff" />
+              <Text style={s.addDeviceBtnText}>Shto Pajisjen</Text>
+            </TouchableOpacity>
           </View>
         );
       case 3:
         return (
           <View style={s.stepContent}>
-            <Text style={s.stepTitle}>📸 Si të skanoni faturën?</Text>
+            <Text style={s.stepTitle}>Si të skanoni faturën?</Text>
             <Text style={s.stepSub}>Mësoni si të përdorni skanerin tonë inteligjent për faturat e KESCO-s.</Text>
             
             <View style={s.guideContainer}>
@@ -280,6 +308,10 @@ const styles = (theme) => StyleSheet.create({
   inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, borderRadius: 16, paddingHorizontal: 15, borderWidth: 1, borderColor: theme.border, height: 60 },
   inputIcon: { marginRight: 12 },
   input: { flex: 1, color: theme.textPrimary, fontSize: 16 },
+  deviceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.card, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 12, marginBottom: 10, borderWidth: 1, borderColor: theme.primary + '40' },
+  deviceRowText: { flex: 1, color: theme.textPrimary, fontSize: 14, fontWeight: '600' },
+  addDeviceBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, borderRadius: 14, height: 50 },
+  addDeviceBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   guideContainer: { gap: 15, marginBottom: 30 },
   guideItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, padding: 15, borderRadius: 15, borderWidth: 1, borderColor: theme.border },
   guideNumber: { width: 28, height: 28, borderRadius: 14, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
