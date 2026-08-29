@@ -96,6 +96,8 @@ export default function DashboardScreen({ navigation }) {
         goalsUid, goalsGlobal,
         inProgressRaw,
         completedRaw,
+        lastBillRaw,
+        userDevicesRaw,
       ] = await Promise.all([
         supabase.from('bills').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
         supabase.from('devices').select('*').eq('user_id', uid),
@@ -105,15 +107,34 @@ export default function DashboardScreen({ navigation }) {
         AsyncStorage.getItem('user_goals'),
         AsyncStorage.getItem(`${uid}_in_progress_challenges`),
         AsyncStorage.getItem(`${uid}_completed_challenges`),
+        AsyncStorage.getItem('last_bill'),
+        AsyncStorage.getItem('user_devices'),
       ]);
 
-      // 1. Bills
-      const bills = billsRes?.data;
+      // 1. Bills (with AsyncStorage fallback)
+      let bills = billsRes?.data || [];
+      if (bills.length === 0 && lastBillRaw) {
+        try { bills = [JSON.parse(lastBillRaw)]; } catch (_) {}
+      }
 
-      // 2. Devices (ALL — parse status from type suffix)
-      const rawDevices = devicesRes?.data;
+      // 2. Devices (with AsyncStorage fallback)
+      let rawDevices = devicesRes?.data || [];
+      if (rawDevices.length === 0 && userDevicesRaw) {
+        try {
+          const parsed = JSON.parse(userDevicesRaw);
+          if (Array.isArray(parsed)) {
+            rawDevices = parsed.map(d => ({
+              id: d.id,
+              name: d.name,
+              avg_consumption: d.power || d.avg_consumption || 100,
+              type: d.type ? (d.type.endsWith('_on') || d.type.endsWith('_off') ? d.type : `${d.type}_on`) : 'bulb_on',
+            }));
+          }
+        } catch (_) {}
+      }
+
       const devices = (rawDevices || []).map(d => {
-        const isOn = d.type ? d.type.endsWith('_on') : false;
+        const isOn = d.type ? d.type.endsWith('_on') : true;
         const baseType = d.type ? d.type.replace(/_(on|off)$/, '') : d.type;
         return { ...d, isOn, baseType };
       });

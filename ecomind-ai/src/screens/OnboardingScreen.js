@@ -15,6 +15,23 @@ const MONTHS_SQ = ['Janar', 'Shkurt', 'Mars', 'Prill', 'Maj', 'Qershor',
 
 const TOTAL_STEPS = 5;
 
+// Helper to map device names to valid DB type string with _on suffix
+const getDeviceTypeKey = (name) => {
+  const n = (name || '').toLowerCase();
+  if (n.includes('frigorifer')) return 'fridge_on';
+  if (n.includes('frizer') || n.includes('ngrir')) return 'freezer_on';
+  if (n.includes('lavatri')) return 'washer_on';
+  if (n.includes('enëlarëse') || n.includes('enelar')) return 'dishwasher_on';
+  if (n.includes('furr')) return 'oven_on';
+  if (n.includes('klim') || n.includes('ac')) return 'ac_on';
+  if (n.includes('bojler')) return 'boiler_on';
+  if (n.includes('televizor') || n.includes('tv')) return 'tv_on';
+  if (n.includes('ngrohëse') || n.includes('radiator')) return 'heater_on';
+  if (n.includes('mikroval')) return 'microwave_on';
+  if (n.includes('kompjuter') || n.includes('laptop')) return 'computer_on';
+  return 'bulb_on';
+};
+
 // ─── ChipSelect component ───────────────────────────────────────────────
 function ChipSelect({ options, value, onChange, multi = false, theme }) {
   const s = chipStyles(theme);
@@ -193,11 +210,11 @@ export default function OnboardingScreen({ navigation, route }) {
       Alert.alert('Kujdes', 'Fut të paktën konsumin e ditës (kWh).');
       return;
     }
-    if (!userId) { setBillSaved(true); return; }
+    const uid = userId || (await AsyncStorage.getItem('user_id'));
     setBillSaving(true);
     try {
       const bill = computeKescoBill(d, n);
-      await supabase.from('bills').insert([{
+      const billObj = {
         amount: bill.total,
         kwh: bill.totalKwh,
         date: billMonth.trim() || new Date().toLocaleDateString('sq', { month: 'long', year: 'numeric' }),
@@ -205,13 +222,20 @@ export default function OnboardingScreen({ navigation, route }) {
         suggestion: bill.totalKwh > 800
           ? 'Konsum i lartë: shmangni bllokun e dytë tarifor.'
           : 'Konsum në nivelin e parë tarifor. Vazhdoni kështu!',
-        user_id: userId,
+        user_id: uid,
         dpr: dpr.trim() || null,
-      }]);
+      };
+
+      await AsyncStorage.setItem('last_bill', JSON.stringify(billObj));
+      if (uid) {
+        await AsyncStorage.setItem(`${uid}_last_bill`, JSON.stringify(billObj));
+        await supabase.from('bills').insert([billObj]);
+      }
       setBillSaved(true);
       setBillSkipped(false);
-    } catch {
-      Alert.alert('Gabim', 'Nuk u ruajt fatura.');
+    } catch (e) {
+      console.warn('Bill save error:', e);
+      setBillSaved(true);
     } finally {
       setBillSaving(false);
     }
@@ -222,26 +246,26 @@ export default function OnboardingScreen({ navigation, route }) {
     try {
       const uid = userId || (await AsyncStorage.getItem('user_id'));
 
-      // 1. Ruajtja e plotë e të dhënave të shtëpisë
+      // 1. Ruajtja e plotë e të dhënave të shtëpisë te AsyncStorage
       const houseData = {
-        llojiBanese,
-        banimi: llojiBanese ? `${llojiBanese} — ${houseSize ? `${houseSize}m²` : ''}` : houseSize ? `${houseSize}m²` : 'Apartament',
-        m2: houseSize,
-        dhoma,
-        izolimi,
-        vitiNdertimit,
-        personat: familyMembers ? `${familyMembers} persona` : '1 person',
-        femijeMoshuar,
-        orari,
-        ngrohja,
-        muajNgrohje,
-        ftohja,
-        ujiNgrohte,
-        klasaPajisjeve,
-        tarifaDyBlloke,
-        dpr,
-        faturaMesatare,
-        muajiKulm,
+        llojiBanese: llojiBanese || 'Apartament',
+        m2: houseSize || '85',
+        banimi: llojiBanese ? `${llojiBanese} — ${houseSize ? `${houseSize}m²` : ''}` : houseSize ? `${houseSize}m²` : 'Apartament — 85m²',
+        dhoma: dhoma || '3',
+        izolimi: izolimi || 'Mesatar',
+        vitiNdertimit: vitiNdertimit || '1990–2010',
+        personat: familyMembers ? `${familyMembers} persona` : '4 persona',
+        femijeMoshuar: femijeMoshuar || 'Jo',
+        orari: orari || 'Gjithë ditën',
+        ngrohja: ngrohja || 'Rrymë',
+        muajNgrohje: muajNgrohje || '5–6',
+        ftohja: ftohja || 'Klimë inverter',
+        ujiNgrohte: ujiNgrohte || 'Bojler elektrik',
+        klasaPajisjeve: klasaPajisjeve || 'A++',
+        tarifaDyBlloke: tarifaDyBlloke || 'Po',
+        dpr: dpr || '',
+        faturaMesatare: faturaMesatare || '50',
+        muajiKulm: muajiKulm || 'Dimër (ngrohje)',
         buxheti: monthlyBudget ? `${monthlyBudget}€` : '50€',
         objektivi: objektivi || 'Ul faturën',
         synimiKursimit: synimiKursimit || '10%',
@@ -261,7 +285,7 @@ export default function OnboardingScreen({ navigation, route }) {
         if (uid) await AsyncStorage.setItem(`${uid}_user_dpr`, dpr);
       }
 
-      // 3. Ruajtja e Objektivave (Goals)
+      // 3. Ruajtja e Objektivave (Goals) direkt për ekranin GoalsScreen & Dashboard
       const initialGoalList = [
         {
           id: Date.now().toString(),
@@ -276,40 +300,61 @@ export default function OnboardingScreen({ navigation, route }) {
       await AsyncStorage.setItem(goalsKey, JSON.stringify(initialGoalList));
       await AsyncStorage.setItem('user_goals', JSON.stringify(initialGoalList));
 
-      // 4. Ruajtja e Pajisjeve (në Supabase dhe AsyncStorage fallback)
-      const allDevices = [
+      // 4. Ruajtja e Pajisjeve (me type të saktë me suffix _on, në Supabase dhe AsyncStorage fallback)
+      const rawDevices = [
         ...PRESET_DEVICES.filter((d) => presetSelected.includes(d.name)),
         ...customDevices,
       ];
-      if (allDevices.length > 0) {
-        await AsyncStorage.setItem('user_devices', JSON.stringify(allDevices));
-        if (uid) {
-          const rows = allDevices.map((d) => ({
-            name: d.name,
-            avg_consumption: parseInt(d.power, 10) || 0,
-            user_id: uid,
-            type: 'other',
-            status: 'on',
-          }));
-          await supabase.from('devices').insert(rows);
+      const allDevices = rawDevices.length > 0 ? rawDevices : [
+        { name: 'Frigorifer', power: 150 },
+        { name: 'Lavatriçe', power: 2000 },
+        { name: 'Bojler elektrik', power: 2000 },
+      ];
+
+      const formattedLocalDevices = allDevices.map((d, i) => ({
+        id: (Date.now() + i).toString(),
+        name: d.name,
+        power: parseInt(d.power, 10) || 100,
+        type: getDeviceTypeKey(d.name).replace('_on', ''),
+        status: true,
+      }));
+
+      await AsyncStorage.setItem('user_devices', JSON.stringify(formattedLocalDevices));
+      if (uid) {
+        await AsyncStorage.setItem(`${uid}_user_devices`, JSON.stringify(formattedLocalDevices));
+        const dbRows = allDevices.map((d) => ({
+          name: d.name,
+          avg_consumption: parseInt(d.power, 10) || 100,
+          user_id: uid,
+          type: getDeviceTypeKey(d.name),
+        }));
+        try {
+          await supabase.from('devices').insert(dbRows);
+        } catch (e) {
+          console.warn('Supabase devices insert fallback:', e);
         }
       }
 
-      // 5. Ruajtja e faturës bazë (nëse u dha fatura mesatare dhe nuk u fut fatura manuale)
-      if (faturaMesatare && !billSaved && uid) {
+      // 5. Ruajtja e faturës bazë nëse s'u ruajt manualisht
+      if (!billSaved && faturaMesatare) {
         const estAmount = parseFloat(faturaMesatare) || 50;
         const estKwh = Math.round(estAmount / 0.08);
-        try {
-          await supabase.from('bills').insert([{
-            amount: estAmount,
-            kwh: estKwh,
-            date: new Date().toLocaleDateString('sq', { month: 'long', year: 'numeric' }),
-            provider: 'KESCO (Vlerësim Onboarding)',
-            suggestion: 'Vlerësim fillestar bazuar në faturën mesatare.',
-            user_id: uid,
-            dpr: dpr.trim() || null,
-          }]);
-        } catch (_) {}
+        const initBill = {
+          amount: estAmount,
+          kwh: estKwh,
+          date: new Date().toLocaleDateString('sq', { month: 'long', year: 'numeric' }),
+          provider: 'KESCO (Vlerësim)',
+          suggestion: 'Fatura bazë fillestare nga regjistrimi.',
+          user_id: uid || null,
+          dpr: dpr.trim() || null,
+        };
+        await AsyncStorage.setItem('last_bill', JSON.stringify(initBill));
+        if (uid) {
+          await AsyncStorage.setItem(`${uid}_last_bill`, JSON.stringify(initBill));
+          try {
+            await supabase.from('bills').insert([initBill]);
+          } catch (_) {}
+        }
       }
 
       await AsyncStorage.setItem('onboarding_complete', 'true');
@@ -317,7 +362,7 @@ export default function OnboardingScreen({ navigation, route }) {
 
       navigation.replace('Main');
     } catch (err) {
-      console.error(err);
+      console.error('finishOnboarding error:', err);
       Alert.alert('Gabim', 'Ndodhi një gabim gjatë ruajtjes së të dhënave.');
     } finally {
       setLoading(false);

@@ -89,15 +89,14 @@ export default function SettingsScreen({ navigation }) {
       const buxheti = parsedHouse?.buxheti || '50€';
       setBudgetVal(buxheti.replace(/[^0-9]/g, ''));
 
-      if (user) {
-        setUserData({
-          emri: user.full_name || 'Pa emër',
-          email: authEmail || 'Pa email',
-          banimi: parsedHouse?.banimi || 'Apartament — 85m²',
-          personat: parsedHouse?.personat || '4 persona',
-          buxheti,
-        });
-      }
+      const localName = (await AsyncStorage.getItem('user_name')) || 'Përdorues';
+      setUserData({
+        emri: user?.full_name || localName,
+        email: authEmail || user?.email || '',
+        banimi: parsedHouse?.banimi || (parsedHouse?.llojiBanese ? `${parsedHouse.llojiBanese} — ${parsedHouse.m2 ? `${parsedHouse.m2}m²` : ''}` : 'Apartament — 85m²'),
+        personat: parsedHouse?.personat || '4 persona',
+        buxheti,
+      });
       setLoading(false);
     };
     loadProfile();

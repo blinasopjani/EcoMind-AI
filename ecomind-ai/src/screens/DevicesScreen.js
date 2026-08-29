@@ -97,28 +97,49 @@ export default function DevicesScreen() {
   const fetchDevices = async (uid) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('devices')
-        .select('*')
-        .eq('user_id', uid);
-
-      if (error) throw error;
-      if (data) {
-        setDevices(data.map(d => {
-          const dbType = d.type || 'bulb_off';
-          const isOn = dbType.endsWith('_on');
-          const baseType = dbType.replace(/_(on|off)$/, '');
-          return {
-            id: d.id,
-            name: d.name || 'Pa emër',
-            type: baseType || 'bulb',
-            power: d.avg_consumption || d.power || 0,
-            status: isOn
-          };
-        }));
+      let dbDevices = [];
+      if (uid) {
+        const { data, error } = await supabase
+          .from('devices')
+          .select('*')
+          .eq('user_id', uid);
+        if (!error && data && data.length > 0) {
+          dbDevices = data;
+        }
       }
+
+      if (dbDevices.length === 0) {
+        const localRaw = (await AsyncStorage.getItem(`${uid}_user_devices`)) || (await AsyncStorage.getItem('user_devices'));
+        if (localRaw) {
+          const parsedLocal = JSON.parse(localRaw);
+          if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
+            setDevices(parsedLocal.map(d => ({
+              id: d.id || Math.random().toString(),
+              name: d.name || 'Pa emër',
+              type: d.type || 'bulb',
+              power: parseInt(d.power, 10) || 100,
+              status: d.status !== undefined ? d.status : true,
+            })));
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      setDevices(dbDevices.map(d => {
+        const dbType = d.type || 'bulb_off';
+        const isOn = dbType.endsWith('_on');
+        const baseType = dbType.replace(/_(on|off)$/, '');
+        return {
+          id: d.id,
+          name: d.name || 'Pa emër',
+          type: baseType || 'bulb',
+          power: d.avg_consumption || d.power || 0,
+          status: isOn
+        };
+      }));
     } catch (err) {
-      showAlert('Gabim', 'Nuk u arritën të ngarkohen pajisjet. Provoni përsëri.');
+      console.warn('Devices fetch error:', err);
     } finally {
       setLoading(false);
     }

@@ -38,12 +38,28 @@ export default function AIInsightsScreen() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const uid = await AsyncStorage.getItem('user_id');
       const { data: bills } = await supabase.from('bills').select('*').order('created_at', { ascending: false });
       const { data: devices } = await supabase.from('devices').select('*');
+      const houseStr = (await AsyncStorage.getItem(`${uid}_house_data`)) || (await AsyncStorage.getItem('house_data'));
+      const localDevsStr = (await AsyncStorage.getItem(`${uid}_user_devices`)) || (await AsyncStorage.getItem('user_devices'));
+      const lastBillStr = (await AsyncStorage.getItem(`${uid}_last_bill`)) || (await AsyncStorage.getItem('last_bill'));
 
-      setData({ bills: bills || [], devices: devices || [] });
-      setHasData((bills || []).length > 0 || (devices || []).length > 0);
-      generateInsights(bills || [], devices || []);
+      let finalBills = bills || [];
+      if (finalBills.length === 0 && lastBillStr) {
+        try { finalBills = [JSON.parse(lastBillStr)]; } catch (_) {}
+      }
+
+      let finalDevices = devices || [];
+      if (finalDevices.length === 0 && localDevsStr) {
+        try { finalDevices = JSON.parse(localDevsStr); } catch (_) {}
+      }
+
+      const houseData = houseStr ? JSON.parse(houseStr) : null;
+
+      setData({ bills: finalBills, devices: finalDevices, house: houseData });
+      setHasData(finalBills.length > 0 || finalDevices.length > 0 || !!houseData);
+      generateInsights(finalBills, finalDevices, houseData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -51,14 +67,23 @@ export default function AIInsightsScreen() {
     }
   };
 
-  const generateInsights = (bills, devices) => {
+  const generateInsights = (bills, devices, houseData) => {
     let newInsights = [];
     const lastBill = bills.length > 0 ? bills[0] : null;
-    const hasBojler = devices.some(d => (d.name || '').toLowerCase().includes('bojler'));
+    const hasBojler = devices.some(d => (d.name || '').toLowerCase().includes('bojler')) || houseData?.ujiNgrohte?.includes('Bojler');
     const hasAC = devices.some(d => {
       const n = (d.name || '').toLowerCase();
-      return n.includes('ac') || n.includes('kondicioner');
-    });
+      return n.includes('ac') || n.includes('kondicioner') || n.includes('klimë');
+    }) || houseData?.ftohja?.includes('Klimë');
+
+    if (houseData) {
+      newInsights.push({
+        title: `Profilizimi i Shtëpisë (${houseData.banimi || 'Banesë'})`,
+        desc: `Shtëpia juaj përdor ${houseData.ngrohja || 'energji'} për ngrohje dhe ka ${houseData.personat || 'anëtarë'}. Rekomandimet janë të përshtatura sipas këtij profili.`,
+        icon: 'home',
+        color: '#3B82F6',
+      });
+    }
 
     if (lastBill) {
       if (lastBill.kwh > 500) {
