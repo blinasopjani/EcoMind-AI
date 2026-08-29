@@ -132,6 +132,7 @@ export default function OnboardingScreen({ navigation, route }) {
   const [billMonth, setBillMonth] = useState('');
   const [billSaved, setBillSaved] = useState(false);
   const [billSaving, setBillSaving] = useState(false);
+  const [billSkipped, setBillSkipped] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickYear, setPickYear] = useState(new Date().getFullYear());
 
@@ -144,7 +145,6 @@ export default function OnboardingScreen({ navigation, route }) {
     AsyncStorage.getItem('user_name').then((n) => { if (n) setUserName(n); });
   }, []);
 
-  // Correct step-by-step proceed check
   const canProceed = () => {
     if (step === 1) return !!llojiBanese && !!houseSize;
     if (step === 2) return !!familyMembers;
@@ -178,7 +178,6 @@ export default function OnboardingScreen({ navigation, route }) {
     }
   };
 
-  // Fix: Kapërce / Anashkalo skips ONLY the current step (advances step by step)
   const handleSkipStep = () => {
     if (step < TOTAL_STEPS) {
       setStep(step + 1);
@@ -210,6 +209,7 @@ export default function OnboardingScreen({ navigation, route }) {
         dpr: dpr.trim() || null,
       }]);
       setBillSaved(true);
+      setBillSkipped(false);
     } catch {
       Alert.alert('Gabim', 'Nuk u ruajt fatura.');
     } finally {
@@ -220,15 +220,17 @@ export default function OnboardingScreen({ navigation, route }) {
   const finishOnboarding = async () => {
     setLoading(true);
     try {
-      const uid = userId;
+      const uid = userId || (await AsyncStorage.getItem('user_id'));
 
+      // 1. Ruajtja e plotë e të dhënave të shtëpisë
       const houseData = {
         llojiBanese,
-        banimi: houseSize ? `${houseSize}m²` : '',
+        banimi: llojiBanese ? `${llojiBanese} — ${houseSize ? `${houseSize}m²` : ''}` : houseSize ? `${houseSize}m²` : 'Apartament',
+        m2: houseSize,
         dhoma,
         izolimi,
         vitiNdertimit,
-        personat: familyMembers ? `${familyMembers} persona` : '',
+        personat: familyMembers ? `${familyMembers} persona` : '1 person',
         femijeMoshuar,
         orari,
         ngrohja,
@@ -240,27 +242,74 @@ export default function OnboardingScreen({ navigation, route }) {
         dpr,
         faturaMesatare,
         muajiKulm,
-        buxheti: monthlyBudget ? `${monthlyBudget}€` : '',
-        objektivi,
-        synimiKursimit,
+        buxheti: monthlyBudget ? `${monthlyBudget}€` : '50€',
+        objektivi: objektivi || 'Ul faturën',
+        synimiKursimit: synimiKursimit || '10%',
       };
+
       const houseKey = uid ? `${uid}_house_data` : 'house_data';
       await AsyncStorage.setItem(houseKey, JSON.stringify(houseData));
       await AsyncStorage.setItem('house_data', JSON.stringify(houseData));
 
+      // 2. Ruajtja e Buxhetit dhe DPR
+      if (monthlyBudget) {
+        await AsyncStorage.setItem('monthly_budget', monthlyBudget);
+        if (uid) await AsyncStorage.setItem(`${uid}_monthly_budget`, monthlyBudget);
+      }
+      if (dpr) {
+        await AsyncStorage.setItem('user_dpr', dpr);
+        if (uid) await AsyncStorage.setItem(`${uid}_user_dpr`, dpr);
+      }
+
+      // 3. Ruajtja e Objektivave (Goals)
+      const initialGoalList = [
+        {
+          id: Date.now().toString(),
+          title: objektivi || 'Ul faturën e energjisë',
+          target: parseFloat(monthlyBudget) || 50,
+          unit: '€',
+          current: 0,
+          category: 'Buxheti',
+        },
+      ];
+      const goalsKey = uid ? `${uid}_user_goals` : 'user_goals';
+      await AsyncStorage.setItem(goalsKey, JSON.stringify(initialGoalList));
+      await AsyncStorage.setItem('user_goals', JSON.stringify(initialGoalList));
+
+      // 4. Ruajtja e Pajisjeve (në Supabase dhe AsyncStorage fallback)
       const allDevices = [
         ...PRESET_DEVICES.filter((d) => presetSelected.includes(d.name)),
         ...customDevices,
       ];
-      if (allDevices.length > 0 && uid) {
-        const rows = allDevices.map((d) => ({
-          name: d.name,
-          avg_consumption: parseInt(d.power, 10) || 0,
-          user_id: uid,
-          type: 'other',
-          status: 'on',
-        }));
-        await supabase.from('devices').insert(rows);
+      if (allDevices.length > 0) {
+        await AsyncStorage.setItem('user_devices', JSON.stringify(allDevices));
+        if (uid) {
+          const rows = allDevices.map((d) => ({
+            name: d.name,
+            avg_consumption: parseInt(d.power, 10) || 0,
+            user_id: uid,
+            type: 'other',
+            status: 'on',
+          }));
+          await supabase.from('devices').insert(rows);
+        }
+      }
+
+      // 5. Ruajtja e faturës bazë (nëse u dha fatura mesatare dhe nuk u fut fatura manuale)
+      if (faturaMesatare && !billSaved && uid) {
+        const estAmount = parseFloat(faturaMesatare) || 50;
+        const estKwh = Math.round(estAmount / 0.08);
+        try {
+          await supabase.from('bills').insert([{
+            amount: estAmount,
+            kwh: estKwh,
+            date: new Date().toLocaleDateString('sq', { month: 'long', year: 'numeric' }),
+            provider: 'KESCO (Vlerësim Onboarding)',
+            suggestion: 'Vlerësim fillestar bazuar në faturën mesatare.',
+            user_id: uid,
+            dpr: dpr.trim() || null,
+          }]);
+        } catch (_) {}
       }
 
       await AsyncStorage.setItem('onboarding_complete', 'true');
@@ -676,9 +725,22 @@ export default function OnboardingScreen({ navigation, route }) {
       <View style={[s.divider, { marginVertical: 24 }]} />
 
       <View style={s.billFormBox}>
-        <Text style={[s.billFormTitle, { color: theme.textPrimary, marginBottom: 4 }]}>
-          Fut faturën e fundit KESCO (opsionale)
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <Text style={[s.billFormTitle, { color: theme.textPrimary }]}>
+            Fut faturën e fundit KESCO (opsionale)
+          </Text>
+
+          {!billSaved && !billSkipped && (
+            <TouchableOpacity
+              onPress={() => setBillSkipped(true)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: theme.primary + '15' }}
+            >
+              <Ionicons name="close-circle-outline" size={16} color={theme.primary} />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.primary }}>Anashkalo faturën</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 16, lineHeight: 19 }}>
           Mund ta skanosh te ekrani "Fatura" ose ta futësh manualisht tani. Nëse e kapërcen, analiza fillon sapo të shtosh faturën e parë.
         </Text>
@@ -692,6 +754,21 @@ export default function OnboardingScreen({ navigation, route }) {
             <Text style={[s.billSavedText, { color: theme.textPrimary }]}>
               Fatura u ruajt! ({billCalc.total} € — {billCalc.totalKwh} kWh)
             </Text>
+          </View>
+        ) : billSkipped ? (
+          <View style={[s.billSavedBox, {
+            backgroundColor: theme.card,
+            borderColor: theme.border
+          }]}>
+            <Ionicons name="information-circle-outline" size={26} color={theme.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[s.billSavedText, { color: theme.textPrimary, fontSize: 13 }]}>
+                Fatura u anashkalua — mund ta skanoni ose futni kur të dëshironi te ekrani "Fatura".
+              </Text>
+              <TouchableOpacity onPress={() => setBillSkipped(false)} style={{ marginTop: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.primary }}>+ Shto faturën tani</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : (
           <View style={{ gap: 14 }}>
@@ -791,18 +868,26 @@ export default function OnboardingScreen({ navigation, route }) {
               </View>
             )}
 
-            <TouchableOpacity
-              style={[s.addDeviceBtn, { marginTop: 6 }]}
-              onPress={saveOnboardingBill}
-              disabled={billSaving}
-            >
-              {billSaving ? <ActivityIndicator color="#fff" /> : (
-                <>
-                  <Ionicons name="save-outline" size={18} color="#fff" />
-                  <Text style={s.addDeviceBtnText}>Ruaj Faturën</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
+              <TouchableOpacity
+                style={[s.addDeviceBtn, { flex: 2 }]}
+                onPress={saveOnboardingBill}
+                disabled={billSaving}
+              >
+                {billSaving ? <ActivityIndicator color="#fff" /> : (
+                  <>
+                    <Ionicons name="save-outline" size={18} color="#fff" />
+                    <Text style={s.addDeviceBtnText}>Ruaj Faturën</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.addDeviceBtn, { flex: 1, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]}
+                onPress={() => setBillSkipped(true)}
+              >
+                <Text style={[s.addDeviceBtnText, { color: theme.textSecondary, fontSize: 13 }]}>Anashkalo</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
