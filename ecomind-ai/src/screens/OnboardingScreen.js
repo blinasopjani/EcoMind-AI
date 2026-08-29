@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform, Image } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform, Image, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { computeKescoBill } from '../data/kescoTariff';
+
+const MONTHS_SQ = ['Janar', 'Shkurt', 'Mars', 'Prill', 'Maj', 'Qershor', 'Korrik', 'Gusht', 'Shtator', 'Tetor', 'Nëntor', 'Dhjetor'];
 
 export default function OnboardingScreen({ navigation, route }) {
   const { theme, isDarkMode } = useTheme();
@@ -14,6 +17,49 @@ export default function OnboardingScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState('');
   const { userId } = route.params || {};
+
+  // Step 3: manual bill entry state
+  const [billDayKwh, setBillDayKwh] = useState('');
+  const [billNightKwh, setBillNightKwh] = useState('');
+  const [billMonth, setBillMonth] = useState('');
+  const [billSaved, setBillSaved] = useState(false);
+  const [billSaving, setBillSaving] = useState(false);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [pickYear, setPickYear] = useState(new Date().getFullYear());
+
+  const billCalc = useMemo(
+    () => computeKescoBill(parseFloat(billDayKwh) || 0, parseFloat(billNightKwh) || 0),
+    [billDayKwh, billNightKwh]
+  );
+
+  const saveOnboardingBill = async () => {
+    const d = parseFloat(billDayKwh) || 0;
+    const n = parseFloat(billNightKwh) || 0;
+    if (d + n <= 0) {
+      Alert.alert('Kujdes', 'Fut të paktën konsumin e ditës (kWh).');
+      return;
+    }
+    if (!userId) { setBillSaved(true); return; }
+    setBillSaving(true);
+    try {
+      const bill = computeKescoBill(d, n);
+      await supabase.from('bills').insert([{
+        amount: bill.total,
+        kwh: bill.totalKwh,
+        date: billMonth.trim() || new Date().toLocaleDateString('sq', { month: 'long', year: 'numeric' }),
+        provider: 'KESCO',
+        suggestion: bill.totalKwh > 800
+          ? 'Konsum i lartë: shmangni bllokun e dytë tarifor.'
+          : 'Konsum në nivelin e parë tarifor. Vazhdoni kështu!',
+        user_id: userId,
+      }]);
+      setBillSaved(true);
+    } catch (e) {
+      Alert.alert('Gabim', 'Nuk u ruajt fatura.');
+    } finally {
+      setBillSaving(false);
+    }
+  };
 
   useEffect(() => {
     const getUsername = async () => {
@@ -216,30 +262,115 @@ export default function OnboardingScreen({ navigation, route }) {
       case 3:
         return (
           <View style={s.stepContent}>
-            <Text style={s.stepTitle}>Si të skanoni faturën?</Text>
-            <Text style={s.stepSub}>Mësoni si të përdorni skanerin tonë inteligjent për faturat e KESCO-s.</Text>
-            
+            <Text style={s.stepTitle}>Fatura juaj</Text>
+            <Text style={s.stepSub}>Futni faturën tuaj të fundit KESCO, ose mësoni si të skanoni.</Text>
+
+            {/* Udhëzues vizual */}
             <View style={s.guideContainer}>
               <View style={s.guideItem}>
                 <View style={s.guideNumber}><Text style={s.guideNumberText}>1</Text></View>
-                <Text style={s.guideText}>Gjeni pjesën ku shkruhet "Konsumi total" në faturë.</Text>
+                <Text style={s.guideText}>Gjeni "Gjendja e tanishme − paraprake" në faturën KESCO (A1=ditë, A2=natën).</Text>
               </View>
               <View style={s.guideItem}>
                 <View style={s.guideNumber}><Text style={s.guideNumberText}>2</Text></View>
-                <Text style={s.guideText}>Mbajeni telefonin drejt dhe sigurohuni që ka dritë të mjaftueshme.</Text>
+                <Text style={s.guideText}>Skanoni me kamerën te "Fatura" → "Skano", ose futni vlerat manualisht këtu poshtë.</Text>
               </View>
               <View style={s.guideItem}>
                 <View style={s.guideNumber}><Text style={s.guideNumberText}>3</Text></View>
-                <Text style={s.guideText}>AI do të lexojë automatikisht vlerën dhe kWh.</Text>
+                <Text style={s.guideText}>EcoMind do të llogarisë faturën me tarifat zyrtare të KESCO-s.</Text>
               </View>
             </View>
 
-            <View style={s.illustrationPlaceholder}>
-              <LinearGradient colors={['rgba(0,200,150,0.1)', 'rgba(0,200,150,0.05)']} style={s.illuGradient}>
-                <Ionicons name="scan-circle" size={80} color={theme.primary} />
-                <Text style={s.illuText}>Skanimi me AI</Text>
-              </LinearGradient>
-            </View>
+            {/* Futja manuale e faturës */}
+            {billSaved ? (
+              <View style={[s.billSavedBox, { backgroundColor: (theme.success || '#10B981') + '15', borderColor: theme.success || '#10B981' }]}>
+                <Ionicons name="checkmark-circle" size={28} color={theme.success || '#10B981'} />
+                <Text style={[s.billSavedText, { color: theme.textPrimary }]}>Fatura u ruajt! ({billCalc.total} € / {billCalc.totalKwh} kWh)</Text>
+              </View>
+            ) : (
+              <View style={s.billFormBox}>
+                <Text style={[s.billFormTitle, { color: theme.textPrimary }]}>Fut faturën (opsionale)</Text>
+
+                <Text style={s.label}>Muaji</Text>
+                <TouchableOpacity style={s.inputWrapper} onPress={() => setShowMonthPicker(true)}>
+                  <Ionicons name="calendar-outline" size={18} color={theme.textMuted} style={s.inputIcon} />
+                  <Text style={{ color: billMonth ? theme.textPrimary : theme.textMuted, fontSize: 15, flex: 1 }}>
+                    {billMonth || 'Zgjidh muajin…'}
+                  </Text>
+                </TouchableOpacity>
+
+                <Modal visible={showMonthPicker} transparent animationType="fade" onRequestClose={() => setShowMonthPicker(false)}>
+                  <TouchableOpacity style={s.mpOverlay} activeOpacity={1} onPress={() => setShowMonthPicker(false)}>
+                    <View style={[s.mpCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                      <View style={s.mpYearRow}>
+                        <TouchableOpacity onPress={() => setPickYear(y => y - 1)}><Ionicons name="chevron-back" size={22} color={theme.textPrimary} /></TouchableOpacity>
+                        <Text style={[s.mpYear, { color: theme.textPrimary }]}>{pickYear}</Text>
+                        <TouchableOpacity onPress={() => setPickYear(y => y + 1)}><Ionicons name="chevron-forward" size={22} color={theme.textPrimary} /></TouchableOpacity>
+                      </View>
+                      <View style={s.mpGrid}>
+                        {MONTHS_SQ.map((mName, i) => (
+                          <TouchableOpacity key={i} style={[s.mpMonth, { backgroundColor: theme.background, borderColor: theme.border }]}
+                            onPress={() => { setBillMonth(`${mName} ${pickYear}`); setShowMonthPicker(false); }}>
+                            <Text style={[s.mpMonthText, { color: theme.textPrimary }]}>{mName.slice(0, 4)}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </Modal>
+
+                <Text style={s.label}>Konsumi i Ditës — A1 (kWh)</Text>
+                <View style={s.inputWrapper}>
+                  <Ionicons name="sunny-outline" size={18} color={theme.textMuted} style={s.inputIcon} />
+                  <TextInput
+                    style={s.input}
+                    placeholder="p.sh. 809"
+                    placeholderTextColor={theme.textMuted}
+                    value={billDayKwh}
+                    onChangeText={setBillDayKwh}
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                <Text style={s.label}>Konsumi i Natës — A2 (kWh)</Text>
+                <View style={s.inputWrapper}>
+                  <Ionicons name="moon-outline" size={18} color={theme.textMuted} style={s.inputIcon} />
+                  <TextInput
+                    style={s.input}
+                    placeholder="p.sh. 149"
+                    placeholderTextColor={theme.textMuted}
+                    value={billNightKwh}
+                    onChangeText={setBillNightKwh}
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                {(parseFloat(billDayKwh) + parseFloat(billNightKwh) > 0) && (
+                  <View style={[s.previewBox, { backgroundColor: (theme.primary) + '12', borderColor: theme.primary + '30' }]}>
+                    <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '700' }}>Fatura e llogaritur</Text>
+                    <Text style={{ color: theme.primary, fontSize: 28, fontWeight: '900', marginTop: 4 }}>{billCalc.total} €</Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 12, marginTop: 2 }}>{billCalc.totalKwh} kWh • Neto {billCalc.neto}€ + TVSH {billCalc.vat}€</Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[s.addDeviceBtn, { marginTop: 12 }]}
+                  onPress={saveOnboardingBill}
+                  disabled={billSaving}
+                >
+                  {billSaving ? <ActivityIndicator color="#fff" /> : (
+                    <>
+                      <Ionicons name="save-outline" size={18} color="#fff" />
+                      <Text style={s.addDeviceBtnText}>Ruaj Faturën</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity style={{ alignItems: 'center', marginTop: 12 }} onPress={() => setStep(4)}>
+                  <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '600' }}>Anashkalo — do ta shtoj më vonë</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         );
       case 4:
@@ -326,4 +457,18 @@ const styles = (theme) => StyleSheet.create({
   nextText: { color: '#fff', fontSize: 18, fontWeight: '800' },
   skipBtn: { flex: 1, height: 60, alignItems: 'center', justifyContent: 'center' },
   skipText: { color: theme.textSecondary, fontWeight: '700', fontSize: 16 },
+  // Bill form styles (step 3)
+  billFormBox: { backgroundColor: theme.card, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: theme.border, marginTop: 4 },
+  billFormTitle: { fontSize: 16, fontWeight: '800', marginBottom: 16 },
+  billSavedBox: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, borderWidth: 1.5, marginTop: 8 },
+  billSavedText: { fontSize: 14, fontWeight: '700', flex: 1 },
+  previewBox: { borderRadius: 16, padding: 16, alignItems: 'center', marginTop: 14, borderWidth: 1 },
+  // Month picker styles
+  mpOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 30 },
+  mpCard: { borderRadius: 24, padding: 20, borderWidth: 1 },
+  mpYearRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingHorizontal: 10 },
+  mpYear: { fontSize: 20, fontWeight: '800' },
+  mpGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+  mpMonth: { width: '30%', paddingVertical: 12, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
+  mpMonthText: { fontSize: 13, fontWeight: '600' },
 });

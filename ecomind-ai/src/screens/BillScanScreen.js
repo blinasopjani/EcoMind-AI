@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+
+const MONTHS_SQ = ['Janar', 'Shkurt', 'Mars', 'Prill', 'Maj', 'Qershor', 'Korrik', 'Gusht', 'Shtator', 'Tetor', 'Nëntor', 'Dhjetor'];
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../theme/ThemeContext';
-import { EnergyAPI } from '../data/api';
+import { ocrSpaceExtract } from '../data/ocrSpace';
 import { supabase } from '../data/supabase';
 import { computeKescoBill } from '../data/kescoTariff';
-import { scanBillWithOCR } from '../data/ocrService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Krijon një këshillë reale nga rezultati i llogaritur
@@ -29,7 +30,10 @@ export default function BillScanScreen() {
   const [mode, setMode] = useState('manual'); // 'manual' | 'scan'
 
   // --- Futje manuale ---
+  const [dpr, setDpr] = useState('');
   const [month, setMonth] = useState('');
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [pickYear, setPickYear] = useState(new Date().getFullYear());
   const [dayKwh, setDayKwh] = useState('');
   const [nightKwh, setNightKwh] = useState('');
   const [saving, setSaving] = useState(false);
@@ -38,7 +42,6 @@ export default function BillScanScreen() {
   // --- Skanim ---
   const [image, setImage] = useState(null);
   const [scanning, setScanning] = useState(false);
-  const [ocrProgress, setOcrProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState(null);
 
   // Llogaritja live e faturës nga inputet
@@ -62,7 +65,7 @@ export default function BillScanScreen() {
     setSaving(true);
     try {
       const bill = computeKescoBill(d, n);
-      const payload = {
+      const base = {
         amount: bill.total,
         kwh: bill.totalKwh,
         date: month.trim() || new Date().toLocaleDateString('sq', { month: 'long', year: 'numeric' }),
@@ -70,9 +73,14 @@ export default function BillScanScreen() {
         suggestion: genSuggestion(bill),
         user_id: uid,
       };
-      const { error } = await supabase.from('bills').insert([payload]);
+      const payload = dpr.trim() ? { ...base, dpr: dpr.trim() } : base;
+      let { error } = await supabase.from('bills').insert([payload]);
+      // Nëse kolona 'dpr' s'ekziston ende, ruajmë pa të që të mos bllokohet ruajtja
+      if (error && /dpr|column/i.test(error.message || '')) {
+        ({ error } = await supabase.from('bills').insert([base]));
+      }
       if (error) throw error;
-      setSavedResult({ ...payload, breakdown: bill.breakdown, neto: bill.neto, vat: bill.vat, fixed: bill.fixed });
+      setSavedResult({ ...base, dpr: dpr.trim(), breakdown: bill.breakdown, neto: bill.neto, vat: bill.vat, fixed: bill.fixed });
     } catch (e) {
       Alert.alert('Gabim', 'Nuk u ruajt fatura: ' + (e.message || 'provoni përsëri.'));
     } finally {
@@ -81,77 +89,50 @@ export default function BillScanScreen() {
   };
 
   const resetManual = () => {
-    setMonth(''); setDayKwh(''); setNightKwh(''); setSavedResult(null);
+    setDpr(''); setMonth(''); setDayKwh(''); setNightKwh(''); setSavedResult(null);
   };
 
-  // --- Skanim (OCR browser-side me tesseract.js → fallback backend API) ---
-  const processBill = async (uri) => {
+  // --- Skanim (backend OCR; degradon me hijeshi nëse s'arrihet) ---
+  const processBill = async (uri, base64) => {
     setScanning(true);
     setErrorMsg(null);
-    setOcrProgress(0);
     try {
       const uid = await AsyncStorage.getItem('user_id');
       if (!uid) { Alert.alert('Gabim', 'Duhet të kyçeni.'); setScanning(false); return; }
+      if (!base64) throw new Error('no-image');
 
-      let dayVal = 0, nightVal = 0, dateVal = '';
-      let ocrSuccess = false;
+      const dataUrl = `data:image/jpeg;base64,${base64}`;
+      const response = await ocrSpaceExtract(dataUrl); // OCR.space: {dpr, month, dayKwh, nightKwh}
 
-      // 1. Provo OCR në browser (tesseract.js) — nuk kërkon server
-      try {
-        const result = await scanBillWithOCR(uri, (pct) => setOcrProgress(pct));
-        if (result.dayKwh > 0 || result.nightKwh > 0) {
-          dayVal = result.dayKwh;
-          nightVal = result.nightKwh;
-          dateVal = result.date;
-          ocrSuccess = true;
-        }
-      } catch (ocrErr) {
-        console.warn('OCR browser-side dështoi:', ocrErr.message);
-      }
-
-      // 2. Fallback: provo backend API nëse OCR nuk nxori të dhëna
-      if (!ocrSuccess) {
-        try {
-          const response = await EnergyAPI.scanBill(uri);
-          if (response && (response.kwh || response.day_kwh)) {
-            dayVal = response.day_kwh || response.kwh || 0;
-            nightVal = response.night_kwh || 0;
-            dateVal = response.date || '';
-            ocrSuccess = true;
-          }
-        } catch (_) {}
-      }
-
-      if (ocrSuccess) {
-        // Parambush formularin manual — përdoruesi verifikon para se të ruajë
+      const gotSomething = response && (response.dpr || response.dayKwh || response.nightKwh || response.month);
+      if (gotSomething) {
+        // Parambush VETËM fushat që u lexuan me siguri; të tjerat plotësohen manualisht
         setMode('manual');
-        setDayKwh(String(dayVal || ''));
-        setNightKwh(String(nightVal || ''));
-        setMonth(dateVal);
+        if (response.dpr) setDpr(String(response.dpr));
+        if (response.dayKwh) setDayKwh(String(response.dayKwh));
+        if (response.nightKwh) setNightKwh(String(response.nightKwh));
+        if (response.month) setMonth(String(response.month));
         setImage(null);
-        setOcrProgress(0);
-        Alert.alert('✅ U lexua fatura', `A1: ${dayVal} kWh | A2: ${nightVal} kWh\n\nKontrolloni vlerat dhe shtypni "Ruaj faturën".`);
+        Alert.alert('U lexuan disa fusha', 'Kontrolloni dhe plotësoni fushat që mungojnë, pastaj shtypni "Ruaj faturën".');
       } else {
-        throw new Error('Nuk u nxorën të dhëna nga fatura.');
+        throw new Error('empty');
       }
     } catch (error) {
-      setErrorMsg(
-        'Nuk u lexua dot fatura automatikisht. Kontrolloni cilësinë e fotos ose përdorni futjen manuale.'
-      );
+      setErrorMsg('Nuk u lexuan dot të dhënat automatikisht nga fatura. Përdorni futjen manuale ose provoni një foto më të qartë.');
     } finally {
       setScanning(false);
     }
   };
 
   const pickImage = async () => {
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
-    if (!r.canceled) { setImage(r.assets[0].uri); processBill(r.assets[0].uri); }
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.6, base64: true });
+    if (!r.canceled) { const a = r.assets[0]; setImage(a.uri); processBill(a.uri, a.base64); }
   };
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') return;
-    const r = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 });
-    if (!r.canceled) { setImage(r.assets[0].uri); processBill(r.assets[0].uri); }
+    const r = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.6, base64: true });
+    if (!r.canceled) { const a = r.assets[0]; setImage(a.uri); processBill(a.uri, a.base64); }
   };
 
   return (
@@ -171,7 +152,7 @@ export default function BillScanScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={[s.tab, mode === 'scan' && s.tabActive]} onPress={() => setMode('scan')}>
               <Ionicons name="camera-outline" size={18} color={mode === 'scan' ? '#fff' : theme.textSecondary} />
-              <Text style={[s.tabText, mode === 'scan' && s.tabTextActive]}>Skano foton</Text>
+              <Text style={[s.tabText, mode === 'scan' && s.tabTextActive]}>Skano</Text>
             </TouchableOpacity>
           </View>
 
@@ -188,6 +169,7 @@ export default function BillScanScreen() {
                 <View style={s.bigTotal}>
                   <Text style={s.bigTotalVal}>{savedResult.amount} €</Text>
                   <Text style={s.bigTotalLbl}>{savedResult.kwh} kWh • {savedResult.date}</Text>
+                  {savedResult.dpr ? <Text style={s.bigTotalLbl}>DPR: {savedResult.dpr}</Text> : null}
                 </View>
                 {savedResult.breakdown.map(r => (
                   <View key={r.key} style={s.resRow}>
@@ -206,8 +188,33 @@ export default function BillScanScreen() {
               <View style={s.card}>
                 <Text style={s.formHint}>Vlerat i gjeni te fatura KESCO: "Gjendja e tanishme − paraprake" për ditën (A1) dhe natën (A2), ose thjesht konsumi total.</Text>
 
-                <Text style={s.label}>Muaji / Periudha</Text>
-                <TextInput style={s.input} placeholder="p.sh. Shkurt 2024" placeholderTextColor={theme.textMuted} value={month} onChangeText={setMonth} />
+                <Text style={s.label}>DPR (Shifra e konsumatorit)</Text>
+                <TextInput style={s.input} placeholder="p.sh. DPR 90050095" placeholderTextColor={theme.textMuted} value={dpr} onChangeText={setDpr} autoCapitalize="characters" />
+                <Text style={s.fieldHint}>DPR-ja shërben për të verifikuar që fatura i ka vlerat e sakta të shpenzimeve.</Text>
+
+                <Text style={s.label}>Muaji (periudha)</Text>
+                <TouchableOpacity style={s.input} onPress={() => setShowMonthPicker(true)}>
+                  <Text style={{ color: month ? theme.textPrimary : theme.textMuted, fontSize: 15 }}>{month || 'Zgjidh muajin…'}</Text>
+                </TouchableOpacity>
+
+                <Modal visible={showMonthPicker} transparent animationType="fade" onRequestClose={() => setShowMonthPicker(false)}>
+                  <TouchableOpacity style={s.mpOverlay} activeOpacity={1} onPress={() => setShowMonthPicker(false)}>
+                    <View style={s.mpCard}>
+                      <View style={s.mpYearRow}>
+                        <TouchableOpacity onPress={() => setPickYear((y) => y - 1)}><Ionicons name="chevron-back" size={22} color={theme.textPrimary} /></TouchableOpacity>
+                        <Text style={s.mpYear}>{pickYear}</Text>
+                        <TouchableOpacity onPress={() => setPickYear((y) => y + 1)}><Ionicons name="chevron-forward" size={22} color={theme.textPrimary} /></TouchableOpacity>
+                      </View>
+                      <View style={s.mpGrid}>
+                        {MONTHS_SQ.map((mName, i) => (
+                          <TouchableOpacity key={i} style={s.mpMonth} onPress={() => { setMonth(`${mName} ${pickYear}`); setShowMonthPicker(false); }}>
+                            <Text style={s.mpMonthText}>{mName.slice(0, 4)}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </Modal>
 
                 <Text style={s.label}>Konsumi i ditës — A1 (kWh)</Text>
                 <TextInput style={s.input} placeholder="p.sh. 809" placeholderTextColor={theme.textMuted} value={dayKwh} onChangeText={setDayKwh} keyboardType="numeric" />
@@ -250,16 +257,8 @@ export default function BillScanScreen() {
                 <View>
                   <Image source={{ uri: image }} style={s.previewImage} />
                   {scanning ? (
-                    <View style={s.loadingBox}>
-                      <ActivityIndicator size="large" color={theme.primary} />
-                      <Text style={s.loadingText}>Duke lexuar faturën… {ocrProgress > 0 ? `${ocrProgress}%` : ''}</Text>
-                      {ocrProgress > 0 && (
-                        <View style={s.progressBarBg}>
-                          <View style={[s.progressBarFill, { width: `${ocrProgress}%` }]} />
-                        </View>
-                      )}
-                    </View>
-                  ) : errorMsg ? (
+                    <View style={s.loadingBox}><ActivityIndicator size="large" color={theme.primary} /><Text style={s.loadingText}>Duke lexuar faturën…</Text></View>
+                  ) : (
                     <View style={s.errorBox}>
                       <Ionicons name="cloud-offline-outline" size={40} color={theme.warning} />
                       <Text style={s.errorText}>{errorMsg}</Text>
@@ -268,7 +267,7 @@ export default function BillScanScreen() {
                         <TouchableOpacity style={[s.pickBtn, { backgroundColor: '#1E293B' }]} onPress={() => setImage(null)}><Text style={s.btnText}>Foto tjetër</Text></TouchableOpacity>
                       </View>
                     </View>
-                  ) : null}
+                  )}
                 </View>
               )}
             </View>
@@ -283,6 +282,13 @@ export default function BillScanScreen() {
 
 const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
+  mpOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 30 },
+  mpCard: { backgroundColor: theme.card, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: theme.border },
+  mpYearRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingHorizontal: 10 },
+  mpYear: { color: theme.textPrimary, fontSize: 20, fontWeight: '800' },
+  mpGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+  mpMonth: { width: '30%', paddingVertical: 12, borderRadius: 12, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, alignItems: 'center' },
+  mpMonthText: { color: theme.textPrimary, fontSize: 13, fontWeight: '600' },
   header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 30 },
   headerTitle: { color: theme.textPrimary, fontSize: 24, fontWeight: '800' },
   headerSub: { color: theme.textSecondary, fontSize: 13, marginTop: 4 },
@@ -294,6 +300,7 @@ const styles = (theme) => StyleSheet.create({
   tabTextActive: { color: '#fff' },
   card: { backgroundColor: theme.card, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: theme.border },
   formHint: { color: theme.textSecondary, fontSize: 12, lineHeight: 18, marginBottom: 16 },
+  fieldHint: { color: theme.textMuted, fontSize: 11, lineHeight: 15, marginBottom: 6, marginTop: 2 },
   label: { color: theme.textPrimary, fontSize: 13, fontWeight: '700', marginBottom: 8, marginTop: 6 },
   input: { backgroundColor: theme.background, borderRadius: 12, padding: 14, color: theme.textPrimary, borderWidth: 1, borderColor: theme.border, marginBottom: 6 },
   previewBox: { backgroundColor: theme.primary + '12', borderRadius: 16, padding: 16, alignItems: 'center', marginTop: 16, marginBottom: 18, borderWidth: 1, borderColor: theme.primary + '30' },
@@ -320,8 +327,6 @@ const styles = (theme) => StyleSheet.create({
   previewImage: { width: '100%', height: 220, resizeMode: 'cover', borderRadius: 14 },
   loadingBox: { padding: 24, alignItems: 'center' },
   loadingText: { color: theme.textPrimary, marginTop: 12, fontWeight: '600' },
-  progressBarBg: { height: 8, width: '100%', backgroundColor: theme.border + '30', borderRadius: 4, marginTop: 8 },
-  progressBarFill: { height: '100%', backgroundColor: theme.primary, borderRadius: 4 },
   errorBox: { padding: 20, alignItems: 'center' },
   errorText: { color: theme.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 10, lineHeight: 19 },
 });

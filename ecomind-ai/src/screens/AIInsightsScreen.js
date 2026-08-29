@@ -26,6 +26,7 @@ export default function AIInsightsScreen() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({ bills: [], devices: [] });
   const [insights, setInsights] = useState([]);
+  const [hasData, setHasData] = useState(false);
   const [statusMsg, setStatusMsg] = useState({ title: 'Duke analizuar...', sub: 'Po mbledhim të dhënat tuaja.' });
 
   const [chatVisible, setChatVisible] = useState(false);
@@ -41,6 +42,7 @@ export default function AIInsightsScreen() {
       const { data: devices } = await supabase.from('devices').select('*');
 
       setData({ bills: bills || [], devices: devices || [] });
+      setHasData((bills || []).length > 0 || (devices || []).length > 0);
       generateInsights(bills || [], devices || []);
     } catch (err) {
       console.error(err);
@@ -193,20 +195,27 @@ export default function AIInsightsScreen() {
         </LinearGradient>
 
         <View style={s.body}>
-          <View style={s.statusCard}>
-            <Ionicons name="sparkles" size={32} color="#F59E0B" />
-            <Text style={s.statusTitle}>{statusMsg.title}</Text>
-            <Text style={s.statusSub}>{statusMsg.sub}</Text>
-          </View>
-
-          <Text style={s.sectionTitle}>Sugjerimet e Personalizuara</Text>
-          
           {loading ? (
-            <ActivityIndicator size="large" color={theme.primary} />
+            <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 30 }} />
+          ) : !hasData ? (
+            <View style={s.emptyBox}>
+              <Ionicons name="sparkles-outline" size={56} color={theme.border} />
+              <Text style={s.emptyTitle}>Ende s'ka të dhëna për analizë</Text>
+              <Text style={s.emptySub}>Shto një faturë ose pajisje që AI të gjenerojë këshilla reale bazuar në konsumin tënd.</Text>
+            </View>
           ) : (
-            insights.map((insight, index) => (
-              <InsightCard key={index} {...insight} theme={theme} />
-            ))
+            <>
+              <View style={s.statusCard}>
+                <Ionicons name="sparkles" size={32} color="#F59E0B" />
+                <Text style={s.statusTitle}>{statusMsg.title}</Text>
+                <Text style={s.statusSub}>{statusMsg.sub}</Text>
+              </View>
+
+              <Text style={s.sectionTitle}>Sugjerimet e Personalizuara</Text>
+              {insights.map((insight, index) => (
+                <InsightCard key={index} {...insight} theme={theme} />
+              ))}
+            </>
           )}
 
           <TouchableOpacity style={s.chatBtn} onPress={() => setChatVisible(true)}>
@@ -265,6 +274,9 @@ export default function AIInsightsScreen() {
 
 const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
+  emptyBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 50 },
+  emptyTitle: { color: theme.textPrimary, fontSize: 17, fontWeight: '800', marginTop: 16, textAlign: 'center' },
+  emptySub: { color: theme.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 8, lineHeight: 20, paddingHorizontal: 20 },
   header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 30 },
   headerTitle: { color: theme.textPrimary, fontSize: 26, fontWeight: '800' },
   headerSub: { color: theme.textSecondary, fontSize: 13, marginTop: 4 },

@@ -240,22 +240,22 @@ export default function DashboardScreen({ navigation }) {
           {/* Stats Grid */}
           <Text style={s.sectionTitle}>Të dhënat tuaja</Text>
           <View style={s.statsGrid}>
-            <View style={s.statBox}>
+            <TouchableOpacity style={s.statBox} onPress={() => navigation.navigate('Bills')} activeOpacity={0.7}>
               <Ionicons name="wallet-outline" size={20} color={stats.budgetWarning ? '#EF4444' : theme.primary} />
               <Text style={[s.statVal, stats.budgetWarning && { color: '#EF4444' }]}>{stats.monthlyBill.toFixed(2)} €</Text>
               <Text style={s.statLbl}>{stats.estimated ? 'Fatura (vlerësim)' : 'Fatura fundit'}</Text>
               {stats.budgetWarning && <Text style={{ color: '#EF4444', fontSize: 9, fontWeight: '700', marginTop: 3 }}>⚠ TEJKALON BUXHETIN</Text>}
-            </View>
-            <View style={s.statBox}>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.statBox} onPress={() => navigation.navigate('Analytics')} activeOpacity={0.7}>
               <Ionicons name="flash-outline" size={20} color="#F59E0B" />
               <Text style={s.statVal}>{stats.dailyAvg}</Text>
               <Text style={s.statLbl}>kWh/ditë mesatare</Text>
-            </View>
-            <View style={s.statBox}>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.statBox} onPress={() => navigation.navigate('Devices')} activeOpacity={0.7}>
               <Ionicons name="apps-outline" size={20} color="#10B981" />
               <Text style={s.statVal}>{stats.activeDevices}<Text style={{ fontSize: 12, color: theme.textMuted }}>/{stats.totalDevices}</Text></Text>
               <Text style={s.statLbl}>Pajisje aktive</Text>
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Budget Warning Banner */}
@@ -332,28 +332,30 @@ export default function DashboardScreen({ navigation }) {
 
           {/* Efficiency Impact Card */}
           <Text style={[s.sectionTitle, { marginTop: 24 }]}>Impakti i Llogarisë</Text>
-          <LinearGradient colors={['#1E293B', '#0F172A']} style={s.impactCard}>
-            <View style={s.impactRow}>
-              <View style={s.impactItem}>
-                <Text style={[s.impactClass, { color: energyColor }]}>{energyClass}</Text>
-                <Text style={s.impactItemLabel}>Klasa e Energjisë</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Analytics')} activeOpacity={0.85}>
+            <LinearGradient colors={['#1E293B', '#0F172A']} style={s.impactCard}>
+              <View style={s.impactRow}>
+                <View style={s.impactItem}>
+                  <Text style={[s.impactClass, { color: energyColor }]}>{energyClass}</Text>
+                  <Text style={s.impactItemLabel}>Klasa e Energjisë</Text>
+                </View>
+                <View style={s.impactDivider} />
+                <View style={s.impactItem}>
+                  <Text style={s.impactStat}>{stats.co2Saved}</Text>
+                  <Text style={s.impactStatUnit}>kg CO₂</Text>
+                  <Text style={s.impactItemLabel}>CO₂ i Kursyer</Text>
+                </View>
+                <View style={s.impactDivider} />
+                <View style={s.impactItem}>
+                  <Text style={s.impactStat}>{stats.euroSaved}</Text>
+                  <Text style={s.impactStatUnit}>€</Text>
+                  <Text style={s.impactItemLabel}>Kursimet vs Mesatares</Text>
+                </View>
               </View>
-              <View style={s.impactDivider} />
-              <View style={s.impactItem}>
-                <Text style={s.impactStat}>{stats.co2Saved}</Text>
-                <Text style={s.impactStatUnit}>kg CO₂</Text>
-                <Text style={s.impactItemLabel}>CO₂ i Kursyer</Text>
-              </View>
-              <View style={s.impactDivider} />
-              <View style={s.impactItem}>
-                <Text style={s.impactStat}>{stats.euroSaved}</Text>
-                <Text style={s.impactStatUnit}>€</Text>
-                <Text style={s.impactItemLabel}>Kursimet vs Mesatares</Text>
-              </View>
-            </View>
-            <Text style={s.impactDesc}>Krahasuar me mesataren kosovare ~500 kWh/muaj</Text>
-            <Ionicons name="earth" size={80} color="rgba(255,255,255,0.05)" style={s.earthIcon} />
-          </LinearGradient>
+              <Text style={s.impactDesc}>Krahasuar me mesataren kosovare ~500 kWh/muaj</Text>
+              <Ionicons name="earth" size={80} color="rgba(255,255,255,0.05)" style={s.earthIcon} />
+            </LinearGradient>
+          </TouchableOpacity>
 
           <Text style={{ textAlign: 'center', color: theme.textMuted, fontSize: 10, marginBottom: 20, marginTop: 8 }}>EcoMind AI+ v2.3</Text>
           <View style={{ height: 120 }} />

@@ -91,7 +91,9 @@ export default function AnalyticsScreen() {
         co2: (currentKwh * 0.45).toFixed(1),
         devicesDist: devDist,
         changeKwh: changeK,
-        changeEuro: changeE
+        changeEuro: changeE,
+        hasBills: !!(bills && bills.length > 0),
+        history: (bills || []).slice(0, 6).map(b => ({ date: b.date || '—', kwh: b.kwh || 0, amount: b.amount || 0 })),
       });
     } catch (error) {
       console.error(error);
@@ -120,27 +122,51 @@ export default function AnalyticsScreen() {
       </LinearGradient>
 
       <View style={s.body}>
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Krahasimi i Faturave</Text>
-          <AnalyticsCard title="Konsumi Total" value={stats.totalKwh} unit="kWh" change={stats.changeKwh} icon="flash" color={theme.primary} theme={theme} />
-          <AnalyticsCard title="Kostoja" value={stats.totalEuro} unit="€" change={stats.changeEuro} icon="card" color={theme.info} theme={theme} />
-        </View>
-
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Pajisjet më Harxhuese</Text>
-          {stats.devicesDist.length === 0 ? (
-            <Text style={s.emptyText}>Nuk u gjetën pajisje për këtë përdorues.</Text>
-          ) : (
-            <View style={s.deviceStats}>
-              {stats.devicesDist.map((d, i) => (
-                <View key={i} style={s.deviceRow}>
-                  <View style={s.deviceHeader}><Text style={s.deviceName}>{d.name}</Text><Text style={s.devicePercent}>{d.percent}%</Text></View>
-                  <View style={s.progressBarBackground}><View style={[s.progressBarFill, { width: `${d.percent}%`, backgroundColor: d.color }]} /></View>
-                </View>
-              ))}
+        {!stats.hasBills ? (
+          <View style={s.emptyState}>
+            <Ionicons name="bar-chart-outline" size={64} color={theme.border} />
+            <Text style={s.emptyTitle}>Ende s'ka të dhëna</Text>
+            <Text style={s.emptyDesc}>Shto një faturë te seksioni "Fatura" që të shohësh analizën reale të konsumit tënd.</Text>
+          </View>
+        ) : (
+          <>
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Krahasimi i Faturave</Text>
+              <AnalyticsCard title="Konsumi Total" value={stats.totalKwh} unit="kWh" change={stats.changeKwh} icon="flash" color={theme.primary} theme={theme} />
+              <AnalyticsCard title="Kostoja" value={stats.totalEuro} unit="€" change={stats.changeEuro} icon="card" color={theme.info} theme={theme} />
+              <AnalyticsCard title="Gjurma e CO₂" value={stats.co2} unit="kg" icon="leaf" color={theme.success} theme={theme} />
             </View>
-          )}
-        </View>
+
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Pajisjet më Harxhuese</Text>
+              {stats.devicesDist.length === 0 ? (
+                <Text style={s.emptyText}>Nuk u gjetën pajisje për këtë përdorues.</Text>
+              ) : (
+                <View style={s.deviceStats}>
+                  {stats.devicesDist.map((d, i) => (
+                    <View key={i} style={s.deviceRow}>
+                      <View style={s.deviceHeader}><Text style={s.deviceName}>{d.name}</Text><Text style={s.devicePercent}>{d.percent}%</Text></View>
+                      <View style={s.progressBarBackground}><View style={[s.progressBarFill, { width: `${d.percent}%`, backgroundColor: d.color }]} /></View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Historiku i Faturave</Text>
+              <View style={s.deviceStats}>
+                {(stats.history || []).map((h, i) => (
+                  <View key={i} style={s.histRow}>
+                    <Text style={s.histDate}>{h.date}</Text>
+                    <Text style={s.histKwh}>{h.kwh} kWh</Text>
+                    <Text style={s.histAmount}>{h.amount} €</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </>
+        )}
         <View style={{ height: 100 }} />
       </View>
     </ScrollView>
@@ -169,5 +195,12 @@ const styles = (theme) => StyleSheet.create({
   devicePercent: { color: theme.textSecondary, fontSize: 12 },
   progressBarBackground: { height: 6, backgroundColor: theme.border, borderRadius: 3 },
   progressBarFill: { height: '100%', borderRadius: 3 },
-  emptyText: { color: theme.textMuted, textAlign: 'center', marginTop: 10 }
+  emptyText: { color: theme.textMuted, textAlign: 'center', marginTop: 10 },
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 70 },
+  emptyTitle: { color: theme.textPrimary, fontSize: 18, fontWeight: '800', marginTop: 16 },
+  emptyDesc: { color: theme.textSecondary, fontSize: 14, textAlign: 'center', marginTop: 8, lineHeight: 21, paddingHorizontal: 20 },
+  histRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
+  histDate: { color: theme.textSecondary, fontSize: 13, flex: 1 },
+  histKwh: { color: theme.textPrimary, fontSize: 13, fontWeight: '600', width: 90, textAlign: 'right' },
+  histAmount: { color: theme.primary, fontSize: 13, fontWeight: '800', width: 70, textAlign: 'right' }
 });

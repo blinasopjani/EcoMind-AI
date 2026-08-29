@@ -239,7 +239,7 @@ export default function GoalsScreen({ navigation }) {
               <Ionicons name="flash" size={16} color={theme.primary} />
               <Text style={{ color: theme.textSecondary, fontSize: 12, marginLeft: 8 }}>
                 Konsumi i fundit: <Text style={{ color: theme.textPrimary, fontWeight: '700' }}>{consumption.kwh} kWh</Text>
-                {consumption.amount > 0 && <Text> / <Text style={{ color: theme.textPrimary, fontWeight: '700' }}>{consumption.amount.toFixed(2)} €</Text></Text>}
+                {consumption.amount > 0 && <Text> • <Text style={{ color: theme.textPrimary, fontWeight: '700' }}>{consumption.amount.toFixed(2)} €</Text></Text>}
               </Text>
             </View>
           )}

@@ -9,6 +9,27 @@ import { useNavigation } from '@react-navigation/native';
 import { showAlert } from '../data/alertHelper';
 
 
+// Pajisje "smart" të gatshme me konsum tipik (W) — për shtim me një prekje
+const SMART_PRESETS = [
+  { name: 'Klimë', power: 1200, type: 'ac' },
+  { name: 'Bojler', power: 2000, type: 'bulb' },
+  { name: 'Frigorifer', power: 150, type: 'bulb' },
+  { name: 'Televizor', power: 120, type: 'tv' },
+  { name: 'Lavatriçe', power: 2000, type: 'bulb' },
+  { name: 'Mikrovalë', power: 1000, type: 'bulb' },
+];
+
+// Klasifikimi i efiçiencës sipas konsumit mujor (kWh) — për info-point
+const ENERGY_CLASSES = [
+  { cls: 'A+++', range: '≤ 100 kWh', color: '#10B981' },
+  { cls: 'A++', range: '101–150 kWh', color: '#22C55E' },
+  { cls: 'A+', range: '151–200 kWh', color: '#84CC16' },
+  { cls: 'A', range: '201–300 kWh', color: '#EAB308' },
+  { cls: 'B', range: '301–400 kWh', color: '#F97316' },
+  { cls: 'C', range: '401–500 kWh', color: '#EF4444' },
+  { cls: 'D', range: '> 500 kWh', color: '#DC2626' },
+];
+
 const DeviceItem = ({ id, name, type, power, status, onToggle, onEdit, onDelete, theme }) => (
   <View style={styles(theme).deviceCard}>
     <View style={styles(theme).deviceIconContainer}>
@@ -47,6 +68,8 @@ export default function DevicesScreen() {
   const [newName, setNewName] = useState('');
   const [newPower, setNewPower] = useState('');
   const [newType, setNewType] = useState('bulb');
+  const [addMode, setAddMode] = useState('manual'); // 'manual' | 'smart'
+  const [showClassInfo, setShowClassInfo] = useState(false);
   const [userId, setUserId] = useState(null);
 
   const getUserId = async () => {
@@ -190,8 +213,15 @@ export default function DevicesScreen() {
     <View style={s.container}>
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
-          <Text style={s.headerTitle}>Pajisjet Tuaja</Text>
-          <Text style={s.headerSub}>Secili account sheh pajisjet e veta</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.headerTitle}>Pajisjet Tuaja</Text>
+              <Text style={s.headerSub}>Menaxho pajisjet smart dhe normale</Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowClassInfo(true)} style={s.infoBtn}>
+              <Ionicons name="information-circle-outline" size={26} color={theme.textPrimary} />
+            </TouchableOpacity>
+          </View>
         </LinearGradient>
 
         <View style={s.body}>
@@ -217,7 +247,7 @@ export default function DevicesScreen() {
                   theme={theme} 
                 />
               ))}
-              <TouchableOpacity style={s.addBtn} onPress={() => { setEditingId(null); setNewName(''); setNewPower(''); setNewType('bulb'); setModalVisible(true); }}>
+              <TouchableOpacity style={s.addBtn} onPress={() => { setEditingId(null); setNewName(''); setNewPower(''); setNewType('bulb'); setAddMode('manual'); setModalVisible(true); }}>
                 <Ionicons name="add-circle" size={24} color="#fff" />
                 <Text style={s.addBtnText}>Shto Pajisje</Text>
               </TouchableOpacity>
@@ -233,34 +263,87 @@ export default function DevicesScreen() {
           <View style={s.modalContent}>
             <Text style={s.modalTitle}>{editingId ? 'Edito Pajisjen' : 'Shto Pajisje'}</Text>
             
-            <Text style={s.label}>Emri i Pajisjes</Text>
-            <TextInput style={s.input} value={newName} onChangeText={setNewName} placeholder="p.sh. Bojleri, Klima" placeholderTextColor={theme.textMuted} />
-            
-            <Text style={s.label}>Fuqia (Watt)</Text>
-            <TextInput style={s.input} value={newPower} onChangeText={setNewPower} placeholder="p.sh. 2000" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
-            
-            <Text style={s.label}>Lloji i Pajisjes</Text>
-            <View style={s.typeSelector}>
-              {[
-                { key: 'bulb', label: 'Dritë', icon: 'bulb-outline' },
-                { key: 'ac', label: 'Klimë', icon: 'snow' },
-                { key: 'tv', label: 'TV', icon: 'tv-outline' }
-              ].map(item => (
-                <TouchableOpacity
-                  key={item.key}
-                  style={[s.typeOption, newType === item.key && s.typeOptionActive]}
-                  onPress={() => setNewType(item.key)}
-                >
-                  <Ionicons name={item.icon} size={16} color={newType === item.key ? '#fff' : theme.textPrimary} />
-                  <Text style={[s.typeOptionText, newType === item.key && s.typeOptionTextActive]}>{item.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {!editingId && (
+              <>
+                <Text style={s.label}>Mënyra e lidhjes</Text>
+                <View style={s.typeSelector}>
+                  <TouchableOpacity style={[s.typeOption, addMode === 'manual' && s.typeOptionActive]} onPress={() => setAddMode('manual')}>
+                    <Ionicons name="create-outline" size={16} color={addMode === 'manual' ? '#fff' : theme.textPrimary} />
+                    <Text style={[s.typeOptionText, addMode === 'manual' && s.typeOptionTextActive]}>Normale</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[s.typeOption, addMode === 'smart' && s.typeOptionActive]} onPress={() => setAddMode('smart')}>
+                    <Ionicons name="hardware-chip-outline" size={16} color={addMode === 'smart' ? '#fff' : theme.textPrimary} />
+                    <Text style={[s.typeOptionText, addMode === 'smart' && s.typeOptionTextActive]}>Smart</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+
+            {(!editingId && addMode === 'smart') ? (
+              <>
+                <Text style={s.label}>Zgjidh pajisjen smart (konsum tipik)</Text>
+                <View style={s.presetGrid}>
+                  {SMART_PRESETS.map(p => {
+                    const sel = newName === p.name && newPower === String(p.power);
+                    return (
+                      <TouchableOpacity key={p.name} style={[s.presetItem, sel && s.typeOptionActive]} onPress={() => { setNewName(p.name); setNewPower(String(p.power)); setNewType(p.type); }}>
+                        <Text style={[s.presetName, sel && { color: '#fff' }]}>{p.name}</Text>
+                        <Text style={[s.presetW, sel && { color: '#fff' }]}>{p.power} W</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={s.label}>Emri i Pajisjes</Text>
+                <TextInput style={s.input} value={newName} onChangeText={setNewName} placeholder="p.sh. Bojleri, Klima" placeholderTextColor={theme.textMuted} />
+
+                <Text style={s.label}>Fuqia (Watt)</Text>
+                <TextInput style={s.input} value={newPower} onChangeText={setNewPower} placeholder="p.sh. 2000" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
+
+                <Text style={s.label}>Lloji i Pajisjes</Text>
+                <View style={s.typeSelector}>
+                  {[
+                    { key: 'bulb', label: 'Dritë', icon: 'bulb-outline' },
+                    { key: 'ac', label: 'Klimë', icon: 'snow' },
+                    { key: 'tv', label: 'TV', icon: 'tv-outline' }
+                  ].map(item => (
+                    <TouchableOpacity
+                      key={item.key}
+                      style={[s.typeOption, newType === item.key && s.typeOptionActive]}
+                      onPress={() => setNewType(item.key)}
+                    >
+                      <Ionicons name={item.icon} size={16} color={newType === item.key ? '#fff' : theme.textPrimary} />
+                      <Text style={[s.typeOptionText, newType === item.key && s.typeOptionTextActive]}>{item.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
 
             <TouchableOpacity style={s.saveBtn} onPress={ruajPajisje}><Text style={s.saveBtnText}>Ruaj</Text></TouchableOpacity>
             <TouchableOpacity style={{ marginTop: 15, alignItems: 'center' }} onPress={() => setModalVisible(false)}><Text style={{ color: theme.textSecondary }}>Anulo</Text></TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      <Modal visible={showClassInfo} transparent animationType="fade" onRequestClose={() => setShowClassInfo(false)}>
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setShowClassInfo(false)}>
+          <View style={s.modalContent}>
+            <Text style={s.modalTitle}>Klasifikimi i efiçiencës</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 12, marginBottom: 14, lineHeight: 18 }}>
+              Sipas konsumit total mujor (kWh), efiçienca vlerësohet nga A+++ (shumë e mirë) te D (e dobët).
+            </Text>
+            {ENERGY_CLASSES.map(c => (
+              <View key={c.cls} style={s.classRow}>
+                <View style={[s.classBadge, { backgroundColor: c.color }]}><Text style={s.classBadgeText}>{c.cls}</Text></View>
+                <Text style={s.classRange}>{c.range}</Text>
+              </View>
+            ))}
+            <TouchableOpacity style={[s.saveBtn, { marginTop: 16 }]} onPress={() => setShowClassInfo(false)}><Text style={s.saveBtnText}>Mbylle</Text></TouchableOpacity>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -297,4 +380,13 @@ const styles = (theme) => StyleSheet.create({
   typeOptionText: { fontSize: 13, fontWeight: '700', color: theme.textSecondary },
   typeOptionTextActive: { color: '#fff' },
   label: { color: theme.textPrimary, fontSize: 13, fontWeight: '700', marginBottom: 8, marginLeft: 4 },
+  infoBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border },
+  presetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
+  presetItem: { width: '30%', paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.background, alignItems: 'center' },
+  presetName: { color: theme.textPrimary, fontSize: 12, fontWeight: '700' },
+  presetW: { color: theme.textSecondary, fontSize: 11, marginTop: 2 },
+  classRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
+  classBadge: { width: 46, paddingVertical: 4, borderRadius: 8, alignItems: 'center' },
+  classBadgeText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  classRange: { color: theme.textSecondary, fontSize: 13 },
 });
