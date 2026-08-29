@@ -55,19 +55,24 @@ export default function RegisterScreen({ navigation }) {
         return;
       }
 
-      // Ruajmë rreshtin shoqërues në tabelën users (pa password) për lidhjet e tjera
-      await supabase.from('users').upsert([{
+      // Ruajmë ID-në lokalisht — i shpejtë (localStorage në web)
+      await AsyncStorage.setItem('user_id', user.id);
+      await AsyncStorage.setItem('user_name', name);
+
+      // Kalojmë MENJËHERË te Onboarding — nuk e presim upsert-in.
+      // Rreshti në tabelën users krijohet automatikisht nga trigger-i
+      // on_auth_user_created; ky upsert vetëm plotëson full_name/email dhe
+      // kryhet në sfond, pa e bllokuar UI-në (regjistrimi ndihet i menjëhershëm).
+      navigation.replace('Onboarding', { userId: user.id });
+
+      supabase.from('users').upsert([{
         id: user.id,           // e njëjtë me auth.uid() — RLS do ta mbrojë
         full_name: name,
         email: toEmail(email),
         created_at: new Date().toISOString(),
-      }]);
-
-      await AsyncStorage.setItem('user_id', user.id);
-      await AsyncStorage.setItem('user_name', name);
-
-      // Kalojmë te Onboarding duke dërguar ID-në e përdoruesit
-      navigation.replace('Onboarding', { userId: user.id });
+      }]).then(({ error }) => {
+        if (error) console.log('users upsert (sfond):', error.message);
+      });
 
     } catch (error) {
       console.log('Register Error:', error);

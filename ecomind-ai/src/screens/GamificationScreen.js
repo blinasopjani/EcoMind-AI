@@ -72,6 +72,11 @@ const PrizeCard = ({ title, company, points, icon, gradient, theme, userPoints, 
       <View style={styles(theme).prizeInfo}>
         <Text style={styles(theme).prizeTitle}>{title}</Text>
         <Text style={styles(theme).prizeCompany}>{company}</Text>
+        {canAfford ? (
+          <Text style={{ color: theme.success, fontSize: 10, fontWeight: '800', marginTop: 3 }}>Gati për shkëmbim</Text>
+        ) : (
+          <Text style={{ color: theme.warning, fontSize: 10, fontWeight: '700', marginTop: 3 }}>Të mungojnë {(points - userPoints).toLocaleString()} pikë</Text>
+        )}
       </View>
       <TouchableOpacity
         style={[styles(theme).pointsBadge, canAfford && { backgroundColor: theme.primary }]}

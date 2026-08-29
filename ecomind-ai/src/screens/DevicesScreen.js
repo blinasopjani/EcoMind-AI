@@ -69,6 +69,8 @@ export default function DevicesScreen() {
   const [newPower, setNewPower] = useState('');
   const [newType, setNewType] = useState('bulb');
   const [addMode, setAddMode] = useState('manual'); // 'manual' | 'smart'
+  const [smartSearching, setSmartSearching] = useState(false); // simulim i lidhjes smart
+  const [smartMethod, setSmartMethod] = useState(null); // 'qr' | 'net'
   const [showClassInfo, setShowClassInfo] = useState(false);
   const [userId, setUserId] = useState(null);
 
@@ -247,7 +249,7 @@ export default function DevicesScreen() {
                   theme={theme} 
                 />
               ))}
-              <TouchableOpacity style={s.addBtn} onPress={() => { setEditingId(null); setNewName(''); setNewPower(''); setNewType('bulb'); setAddMode('manual'); setModalVisible(true); }}>
+              <TouchableOpacity style={s.addBtn} onPress={() => { setEditingId(null); setNewName(''); setNewPower(''); setNewType('bulb'); setAddMode('manual'); setSmartSearching(false); setModalVisible(true); }}>
                 <Ionicons name="add-circle" size={24} color="#fff" />
                 <Text style={s.addBtnText}>Shto Pajisje</Text>
               </TouchableOpacity>
@@ -267,11 +269,11 @@ export default function DevicesScreen() {
               <>
                 <Text style={s.label}>Mënyra e lidhjes</Text>
                 <View style={s.typeSelector}>
-                  <TouchableOpacity style={[s.typeOption, addMode === 'manual' && s.typeOptionActive]} onPress={() => setAddMode('manual')}>
+                  <TouchableOpacity style={[s.typeOption, addMode === 'manual' && s.typeOptionActive]} onPress={() => { setAddMode('manual'); setSmartSearching(false); }}>
                     <Ionicons name="create-outline" size={16} color={addMode === 'manual' ? '#fff' : theme.textPrimary} />
                     <Text style={[s.typeOptionText, addMode === 'manual' && s.typeOptionTextActive]}>Normale</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[s.typeOption, addMode === 'smart' && s.typeOptionActive]} onPress={() => setAddMode('smart')}>
+                  <TouchableOpacity style={[s.typeOption, addMode === 'smart' && s.typeOptionActive]} onPress={() => { setAddMode('smart'); setSmartSearching(false); }}>
                     <Ionicons name="hardware-chip-outline" size={16} color={addMode === 'smart' ? '#fff' : theme.textPrimary} />
                     <Text style={[s.typeOptionText, addMode === 'smart' && s.typeOptionTextActive]}>Smart</Text>
                   </TouchableOpacity>
@@ -280,8 +282,31 @@ export default function DevicesScreen() {
             )}
 
             {(!editingId && addMode === 'smart') ? (
+              smartSearching ? (
+                <View style={s.searchBox}>
+                  <TouchableOpacity style={s.searchClose} onPress={() => setSmartSearching(false)}>
+                    <Ionicons name="close" size={22} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                  <ActivityIndicator size="large" color={theme.primary} />
+                  <Text style={s.searchTitle}>Po kërkojmë pajisjen…</Text>
+                  <Text style={s.searchSub}>
+                    {smartMethod === 'qr' ? 'Duke skanuar QR-in e pajisjes.' : 'Duke u lidhur përmes internetit.'} Siguro që pajisja të jetë e ndezur dhe afër.
+                  </Text>
+                </View>
+              ) : (
               <>
-                <Text style={s.label}>Zgjidh pajisjen smart (konsum tipik)</Text>
+                <Text style={s.label}>Lidh pajisjen smart</Text>
+                <View style={s.smartMethodRow}>
+                  <TouchableOpacity style={s.smartMethodCard} onPress={() => { setSmartMethod('qr'); setSmartSearching(true); }} activeOpacity={0.8}>
+                    <Ionicons name="qr-code-outline" size={26} color={theme.primary} />
+                    <Text style={s.smartMethodText}>Skano QR</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.smartMethodCard} onPress={() => { setSmartMethod('net'); setSmartSearching(true); }} activeOpacity={0.8}>
+                    <Ionicons name="wifi-outline" size={26} color={theme.primary} />
+                    <Text style={s.smartMethodText}>Përmes internetit</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={s.smartDividerText}>ose zgjidh nga lista (konsum tipik)</Text>
                 <View style={s.presetGrid}>
                   {SMART_PRESETS.map(p => {
                     const sel = newName === p.name && newPower === String(p.power);
@@ -294,6 +319,7 @@ export default function DevicesScreen() {
                   })}
                 </View>
               </>
+              )
             ) : (
               <>
                 <Text style={s.label}>Emri i Pajisjes</Text>
@@ -322,8 +348,10 @@ export default function DevicesScreen() {
               </>
             )}
 
-            <TouchableOpacity style={s.saveBtn} onPress={ruajPajisje}><Text style={s.saveBtnText}>Ruaj</Text></TouchableOpacity>
-            <TouchableOpacity style={{ marginTop: 15, alignItems: 'center' }} onPress={() => setModalVisible(false)}><Text style={{ color: theme.textSecondary }}>Anulo</Text></TouchableOpacity>
+            {!(addMode === 'smart' && smartSearching) && (
+              <TouchableOpacity style={s.saveBtn} onPress={ruajPajisje}><Text style={s.saveBtnText}>Ruaj</Text></TouchableOpacity>
+            )}
+            <TouchableOpacity style={{ marginTop: 15, alignItems: 'center' }} onPress={() => { setSmartSearching(false); setModalVisible(false); }}><Text style={{ color: theme.textSecondary }}>Anulo</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -382,6 +410,14 @@ const styles = (theme) => StyleSheet.create({
   label: { color: theme.textPrimary, fontSize: 13, fontWeight: '700', marginBottom: 8, marginLeft: 4 },
   infoBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border },
   presetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
+  smartMethodRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  smartMethodCard: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 20, borderRadius: 16, borderWidth: 1, borderColor: theme.primary + '40', backgroundColor: theme.primary + '10' },
+  smartMethodText: { color: theme.textPrimary, fontSize: 13, fontWeight: '700' },
+  smartDividerText: { color: theme.textMuted, fontSize: 11, textAlign: 'center', marginBottom: 12, fontWeight: '600' },
+  searchBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 30, paddingHorizontal: 10 },
+  searchClose: { position: 'absolute', top: 0, right: 0, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
+  searchTitle: { color: theme.textPrimary, fontSize: 16, fontWeight: '800', marginTop: 16 },
+  searchSub: { color: theme.textSecondary, fontSize: 12, textAlign: 'center', marginTop: 8, lineHeight: 18 },
   presetItem: { width: '30%', paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.background, alignItems: 'center' },
   presetName: { color: theme.textPrimary, fontSize: 12, fontWeight: '700' },
   presetW: { color: theme.textSecondary, fontSize: 11, marginTop: 2 },

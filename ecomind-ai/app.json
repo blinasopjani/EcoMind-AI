@@ -30,7 +30,8 @@
     "experiments": {
       "baseUrl": "/EcoMind-AI"
     },
-  "assetBundlePatterns": ["**/*"],
-
+    "assetBundlePatterns": [
+      "**/*"
+    ]
   }
 }

@@ -45,4 +45,6 @@ target/
 backend/ecomind.db
 PROMPT_*.md
 _to_delete/
+scratch/
+
 

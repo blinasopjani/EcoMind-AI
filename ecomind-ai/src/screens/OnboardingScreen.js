@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform, Image, Modal } from 'react-native';
+import {
+  View, Text, StyleSheet, TextInput, TouchableOpacity,
+  ScrollView, ActivityIndicator, Alert, Platform, Modal
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
@@ -7,18 +10,119 @@ import { supabase } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { computeKescoBill } from '../data/kescoTariff';
 
-const MONTHS_SQ = ['Janar', 'Shkurt', 'Mars', 'Prill', 'Maj', 'Qershor', 'Korrik', 'Gusht', 'Shtator', 'Tetor', 'Nëntor', 'Dhjetor'];
+const MONTHS_SQ = ['Janar', 'Shkurt', 'Mars', 'Prill', 'Maj', 'Qershor',
+  'Korrik', 'Gusht', 'Shtator', 'Tetor', 'Nëntor', 'Dhjetor'];
+
+const TOTAL_STEPS = 5;
+
+// ─── ChipSelect component ───────────────────────────────────────────────
+function ChipSelect({ options, value, onChange, multi = false, theme }) {
+  const s = chipStyles(theme);
+  const selected = multi ? (Array.isArray(value) ? value : []) : value;
+
+  const toggle = (opt) => {
+    if (multi) {
+      const arr = Array.isArray(selected) ? [...selected] : [];
+      const idx = arr.indexOf(opt);
+      if (idx >= 0) arr.splice(idx, 1);
+      else arr.push(opt);
+      onChange(arr);
+    } else {
+      onChange(opt === selected ? '' : opt);
+    }
+  };
+
+  const isActive = (opt) => multi
+    ? (Array.isArray(selected) && selected.includes(opt))
+    : selected === opt;
+
+  return (
+    <View style={s.row}>
+      {options.map((opt) => (
+        <TouchableOpacity
+          key={opt}
+          style={[s.chip, isActive(opt) && s.chipActive]}
+          onPress={() => toggle(opt)}
+          activeOpacity={0.7}
+        >
+          <Text style={[s.chipText, isActive(opt) && s.chipTextActive]}>{opt}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+const chipStyles = (theme) => StyleSheet.create({
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  chip: {
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20,
+    backgroundColor: theme.card, borderWidth: 1.5, borderColor: theme.border,
+  },
+  chipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  chipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  chipTextActive: { color: '#fff', fontWeight: '700' },
+});
+
+// ─── Preset devices ─────────────────────────────────────────────────────────
+const PRESET_DEVICES = [
+  { name: 'Frigorifer', power: 150, icon: 'snow-outline' },
+  { name: 'Ngrirëse (frizer)', power: 120, icon: 'cube-outline' },
+  { name: 'Lavatriçe', power: 2000, icon: 'water-outline' },
+  { name: 'Enëlarëse', power: 1800, icon: 'restaurant-outline' },
+  { name: 'Furrë elektrike', power: 2500, icon: 'flame-outline' },
+  { name: 'Klimë', power: 1500, icon: 'thermometer-outline' },
+  { name: 'Bojler elektrik', power: 2000, icon: 'water' },
+  { name: 'Televizor', power: 100, icon: 'tv-outline' },
+  { name: 'Ngrohëse elektrike', power: 2000, icon: 'sunny-outline' },
+  { name: 'Mikrovalë', power: 900, icon: 'radio-outline' },
+  { name: 'Kompjuter / Laptop', power: 150, icon: 'laptop-outline' },
+  { name: 'Karikues të shumtë', power: 60, icon: 'battery-charging-outline' },
+];
 
 export default function OnboardingScreen({ navigation, route }) {
-  const { theme, isDarkMode } = useTheme();
+  const { theme } = useTheme();
   const s = styles(theme);
+  const { userId } = route.params || {};
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState('');
-  const { userId } = route.params || {};
 
-  // Step 3: manual bill entry state
+  // Hapi 1: Profili i banesës
+  const [llojiBanese, setLlojiBanese] = useState('');
+  const [houseSize, setHouseSize] = useState('');
+  const [dhoma, setDhoma] = useState('');
+  const [izolimi, setIzolimi] = useState('');
+  const [vitiNdertimit, setVitiNdertimit] = useState('');
+
+  // Hapi 2: Familja dhe orari
+  const [familyMembers, setFamilyMembers] = useState('');
+  const [femijeMoshuar, setFemijeMoshuar] = useState('');
+  const [orari, setOrari] = useState('');
+
+  // Hapi 3: Ngrohja, ftohja, uji
+  const [ngrohja, setNgrohja] = useState('');
+  const [muajNgrohje, setMuajNgrohje] = useState('');
+  const [ftohja, setFtohja] = useState('');
+  const [ujiNgrohte, setUjiNgrohte] = useState('');
+
+  // Hapi 4: Pajisjet
+  const [presetSelected, setPresetSelected] = useState([]);
+  const [klasaPajisjeve, setKlasaPajisjeve] = useState('');
+  const [deviceDraft, setDeviceDraft] = useState({ name: '', power: '' });
+  const [customDevices, setCustomDevices] = useState([]);
+  const [showManualForm, setShowManualForm] = useState(false);
+
+  // Hapi 5: Fatura, tarifa dhe objektiva
+  const [tarifaDyBlloke, setTarifaDyBlloke] = useState('');
+  const [dpr, setDpr] = useState('');
+  const [faturaMesatare, setFaturaMesatare] = useState('');
+  const [muajiKulm, setMuajiKulm] = useState('');
+  const [monthlyBudget, setMonthlyBudget] = useState('');
+  const [objektivi, setObjektivi] = useState('');
+  const [synimiKursimit, setSynimiKursimit] = useState('');
+
+  // Bill scan state (step 5 — manual bill)
   const [billDayKwh, setBillDayKwh] = useState('');
   const [billNightKwh, setBillNightKwh] = useState('');
   const [billMonth, setBillMonth] = useState('');
@@ -31,6 +135,32 @@ export default function OnboardingScreen({ navigation, route }) {
     () => computeKescoBill(parseFloat(billDayKwh) || 0, parseFloat(billNightKwh) || 0),
     [billDayKwh, billNightKwh]
   );
+
+  useEffect(() => {
+    AsyncStorage.getItem('user_name').then((n) => { if (n) setUserName(n); });
+  }, []);
+
+  const canProceed = () => {
+    if (step === 1) return !!houseSize && !!familyMembers;
+    if (step === 5) return !!monthlyBudget && !!objektivi;
+    return true;
+  };
+
+  const handleNext = async () => {
+    if (step === 1 && (!houseSize || !familyMembers)) {
+      Alert.alert('Kujdes', 'Ju lutem plotësoni madhësinë e banesës dhe numrin e anëtarëve.');
+      return;
+    }
+    if (step === 5 && (!monthlyBudget || !objektivi)) {
+      Alert.alert('Kujdes', 'Ju lutem vendosni buxhetin mujor dhe objektivin tuaj kryesor.');
+      return;
+    }
+    if (step < TOTAL_STEPS) {
+      setStep(step + 1);
+    } else {
+      await finishOnboarding();
+    }
+  };
 
   const saveOnboardingBill = async () => {
     const d = parseFloat(billDayKwh) || 0;
@@ -52,96 +182,64 @@ export default function OnboardingScreen({ navigation, route }) {
           ? 'Konsum i lartë: shmangni bllokun e dytë tarifor.'
           : 'Konsum në nivelin e parë tarifor. Vazhdoni kështu!',
         user_id: userId,
+        dpr: dpr.trim() || null,
       }]);
       setBillSaved(true);
-    } catch (e) {
+    } catch {
       Alert.alert('Gabim', 'Nuk u ruajt fatura.');
     } finally {
       setBillSaving(false);
     }
   };
 
-  useEffect(() => {
-    const getUsername = async () => {
-      const name = await AsyncStorage.getItem('user_name');
-      if (name) setUserName(name);
-    };
-    getUsername();
-  }, []);
-
-  // Step 1: Personal & House Data
-  const [formData, setFormData] = useState({
-    fullName: '',
-    houseSize: '',
-    familyMembers: '',
-    monthlyBudget: ''
-  });
-
-  // Step 2: Devices list (multi-device)
-  const [devices, setDevices] = useState([]);
-  const [deviceDraft, setDeviceDraft] = useState({ name: '', power: '' });
-
-  const addDevice = () => {
-    if (!deviceDraft.name.trim() || !deviceDraft.power.trim()) {
-      Alert.alert('Kujdes', 'Plotëso emrin dhe fuqinë e pajisjes.');
-      return;
-    }
-    setDevices([...devices, { ...deviceDraft }]);
-    setDeviceDraft({ name: '', power: '' });
-  };
-
-  const removeDevice = (idx) => {
-    setDevices(devices.filter((_, i) => i !== idx));
-  };
-
-  const handleNext = async () => {
-    if (step === 1) {
-      if (!formData.houseSize || !formData.familyMembers || !formData.monthlyBudget) {
-        Alert.alert('Kujdes', 'Ju lutem plotësoni të gjitha të dhënat e kërkuara.');
-        return;
-      }
-      setStep(2);
-    } else if (step === 2) {
-      if (devices.length === 0) {
-        Alert.alert('Kujdes', 'Shtoni të paktën një pajisje për të vazhduar.');
-        return;
-      }
-      setStep(3);
-    } else if (step === 3) {
-      setStep(4);
-    } else {
-      await finishOnboarding();
-    }
-  };
-
   const finishOnboarding = async () => {
     setLoading(true);
     try {
-      // 1. Ruajmë të dhënat e shtëpisë në AsyncStorage (për t'u përshtatur me SettingsScreen)
+      const uid = userId;
+
       const houseData = {
-        banimi: `${formData.houseSize}m²`,
-        personat: `${formData.familyMembers} persona`,
-        buxheti: `${formData.monthlyBudget}€`
+        llojiBanese,
+        banimi: houseSize ? `${houseSize}m²` : '',
+        dhoma,
+        izolimi,
+        vitiNdertimit,
+        personat: familyMembers ? `${familyMembers} persona` : '',
+        femijeMoshuar,
+        orari,
+        ngrohja,
+        muajNgrohje,
+        ftohja,
+        ujiNgrohte,
+        klasaPajisjeve,
+        tarifaDyBlloke,
+        dpr,
+        faturaMesatare,
+        muajiKulm,
+        buxheti: monthlyBudget ? `${monthlyBudget}€` : '',
+        objektivi,
+        synimiKursimit,
       };
+      const houseKey = uid ? `${uid}_house_data` : 'house_data';
+      await AsyncStorage.setItem(houseKey, JSON.stringify(houseData));
       await AsyncStorage.setItem('house_data', JSON.stringify(houseData));
-      
-      // 2. Save all devices to Supabase (batch insert)
-      if (devices.length > 0 && userId) {
-        const rows = devices.map(d => ({
+
+      const allDevices = [
+        ...PRESET_DEVICES.filter((d) => presetSelected.includes(d.name)),
+        ...customDevices,
+      ];
+      if (allDevices.length > 0 && uid) {
+        const rows = allDevices.map((d) => ({
           name: d.name,
           avg_consumption: parseInt(d.power, 10) || 0,
-          user_id: userId,
+          user_id: uid,
           type: 'other',
           status: 'on',
         }));
         await supabase.from('devices').insert(rows);
       }
 
-      // 3. Mark Onboarding as Complete
       await AsyncStorage.setItem('onboarding_complete', 'true');
-      if (userId) {
-        await AsyncStorage.setItem('user_id', userId.toString());
-      }
+      if (uid) await AsyncStorage.setItem('user_id', uid.toString());
 
       navigation.replace('Main');
     } catch (err) {
@@ -152,268 +250,550 @@ export default function OnboardingScreen({ navigation, route }) {
     }
   };
 
-  const renderStep = () => {
-    switch (step) {
-      case 1:
-        return (
-          <View style={s.stepContent}>
-            <Text style={s.stepTitle}>Përshëndetje{userName ? `, ${userName}` : ''}!</Text>
-            <Text style={s.stepSub}>Na tregoni pak për veten dhe ambientin ku jetoni.</Text>
+  const addCustomDevice = () => {
+    if (!deviceDraft.name.trim() || !deviceDraft.power.trim()) {
+      Alert.alert('Kujdes', 'Plotëso emrin dhe fuqinë e pajisjes.');
+      return;
+    }
+    setCustomDevices([...customDevices, { ...deviceDraft }]);
+    setDeviceDraft({ name: '', power: '' });
+    setShowManualForm(false);
+  };
 
-            <View style={s.inputGroup}>
-              <Text style={s.label}>Madhësia e shtëpisë (m²)</Text>
-              <View style={s.inputWrapper}>
-                <Ionicons name="home-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
-                <TextInput 
-                  style={s.input} 
-                  placeholder="p.sh. 85" 
-                  placeholderTextColor={theme.textMuted} 
-                  value={formData.houseSize} 
-                  onChangeText={(v) => setFormData({...formData, houseSize: v})}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
+  const removeCustomDevice = (idx) => {
+    setCustomDevices(customDevices.filter((_, i) => i !== idx));
+  };
 
-            <View style={s.inputGroup}>
-              <Text style={s.label}>Anëtarët e familjes</Text>
-              <View style={s.inputWrapper}>
-                <Ionicons name="people-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
-                <TextInput 
-                  style={s.input} 
-                  placeholder="p.sh. 4" 
-                  placeholderTextColor={theme.textMuted} 
-                  value={formData.familyMembers} 
-                  onChangeText={(v) => setFormData({...formData, familyMembers: v})}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
+  const renderStep1 = () => (
+    <View style={s.stepContent}>
+      <Text style={s.stepTitle}>Profili i banesës</Text>
+      <Text style={s.stepSub}>Disa të dhëna bazë për të personalizuar analizat tuaja.</Text>
 
-            <View style={s.inputGroup}>
-              <Text style={s.label}>Buxheti i synuar mujor (€)</Text>
-              <View style={s.inputWrapper}>
-                <Ionicons name="wallet-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
-                <TextInput 
-                  style={s.input} 
-                  placeholder="p.sh. 50" 
-                  placeholderTextColor={theme.textMuted} 
-                  value={formData.monthlyBudget} 
-                  onChangeText={(v) => setFormData({...formData, monthlyBudget: v})}
-                  keyboardType="numeric"
-                />
-              </View>
+      <Text style={s.label}>Lloji i banesës *</Text>
+      <ChipSelect
+        theme={theme}
+        options={['Apartament', 'Shtëpi private', 'Studio', 'Tjetër']}
+        value={llojiBanese}
+        onChange={setLlojiBanese}
+      />
+
+      <View style={s.inputGroup}>
+        <Text style={s.label}>Madhësia e banesës (m²) *</Text>
+        <View style={s.inputWrapper}>
+          <Ionicons name="home-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
+          <TextInput
+            style={s.input}
+            placeholder="p.sh. 85"
+            placeholderTextColor={theme.textMuted}
+            value={houseSize}
+            onChangeText={setHouseSize}
+            keyboardType="numeric"
+          />
+        </View>
+      </View>
+
+      <View style={s.inputGroup}>
+        <Text style={s.label}>Numri i dhomave</Text>
+        <View style={s.inputWrapper}>
+          <Ionicons name="grid-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
+          <TextInput
+            style={s.input}
+            placeholder="p.sh. 3"
+            placeholderTextColor={theme.textMuted}
+            value={dhoma}
+            onChangeText={setDhoma}
+            keyboardType="numeric"
+          />
+        </View>
+      </View>
+
+      <Text style={s.label}>Niveli i izolimit termik</Text>
+      <ChipSelect
+        theme={theme}
+        options={['I izoluar mirë', 'Mesatar', 'I dobët', 'Nuk e di']}
+        value={izolimi}
+        onChange={setIzolimi}
+      />
+
+      <View style={{ height: 18 }} />
+      <Text style={s.label}>Viti i ndërtimit</Text>
+      <ChipSelect
+        theme={theme}
+        options={['Para 1990', '1990–2010', 'Pas 2010']}
+        value={vitiNdertimit}
+        onChange={setVitiNdertimit}
+      />
+    </View>
+  );
+
+  const renderStep2 = () => (
+    <View style={s.stepContent}>
+      <Text style={s.stepTitle}>Familja dhe orari</Text>
+      <Text style={s.stepSub}>Kush jeton këtu dhe kur është shtëpia e banuar?</Text>
+
+      <View style={s.inputGroup}>
+        <Text style={s.label}>Anëtarët e familjes *</Text>
+        <View style={s.inputWrapper}>
+          <Ionicons name="people-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
+          <TextInput
+            style={s.input}
+            placeholder="p.sh. 4"
+            placeholderTextColor={theme.textMuted}
+            value={familyMembers}
+            onChangeText={setFamilyMembers}
+            keyboardType="numeric"
+          />
+        </View>
+      </View>
+
+      <Text style={s.label}>A ka fëmijë të vegjël ose të moshuar?</Text>
+      <ChipSelect
+        theme={theme}
+        options={['Po', 'Jo']}
+        value={femijeMoshuar}
+        onChange={setFemijeMoshuar}
+      />
+
+      <View style={{ height: 18 }} />
+      <Text style={s.label}>Orari kur shtëpia është e banuar</Text>
+      <ChipSelect
+        theme={theme}
+        options={['Gjithë ditën', 'Kryesisht mbrëmjeve', 'Me ndërrime']}
+        value={orari}
+        onChange={setOrari}
+      />
+    </View>
+  );
+
+  const renderStep3 = () => (
+    <View style={s.stepContent}>
+      <Text style={s.stepTitle}>Ngrohja, ftohja dhe uji</Text>
+      <Text style={s.stepSub}>Konsumatorët kryesorë të energjisë — të dhënat për parashikime sezionale.</Text>
+
+      <Text style={s.label}>Burimi kryesor i ngrohjes *</Text>
+      <ChipSelect
+        theme={theme}
+        options={['Rrymë', 'Dru', 'Pellet', 'Gaz', 'Ngrohje qendrore', 'Pompë nxehtësie']}
+        value={ngrohja}
+        onChange={setNgrohja}
+      />
+
+      <View style={{ height: 20 }} />
+      <Text style={s.label}>Sa muaj në vit përdor ngrohjen?</Text>
+      <ChipSelect
+        theme={theme}
+        options={['1–2', '3–4', '5–6', 'Mbi 6']}
+        value={muajNgrohje}
+        onChange={setMuajNgrohje}
+      />
+
+      <View style={{ height: 20 }} />
+      <Text style={s.label}>Ftohja në verë</Text>
+      <ChipSelect
+        theme={theme}
+        options={['Klimë inverter', 'Klimë e vjetër', 'Ventilatorë', 'Asnjë']}
+        value={ftohja}
+        onChange={setFtohja}
+      />
+
+      <View style={{ height: 20 }} />
+      <Text style={s.label}>Uji i ngrohtë</Text>
+      <ChipSelect
+        theme={theme}
+        options={['Bojler elektrik', 'Panel diellor', 'Ngrohës me gaz', 'Tjetër']}
+        value={ujiNgrohte}
+        onChange={setUjiNgrohte}
+      />
+    </View>
+  );
+
+  const renderStep4 = () => (
+    <View style={s.stepContent}>
+      <Text style={s.stepTitle}>Pajisjet e tua</Text>
+      <Text style={s.stepSub}>Zgjidh pajisjet që ke. App-i do t'i shtojë me konsum tipik.</Text>
+
+      <View style={s.presetGrid}>
+        {PRESET_DEVICES.map((d) => {
+          const active = presetSelected.includes(d.name);
+          return (
+            <TouchableOpacity
+              key={d.name}
+              style={[s.presetCard, active && s.presetCardActive]}
+              onPress={() => {
+                const arr = [...presetSelected];
+                const idx = arr.indexOf(d.name);
+                if (idx >= 0) arr.splice(idx, 1);
+                else arr.push(d.name);
+                setPresetSelected(arr);
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name={active ? 'checkmark-circle' : d.icon}
+                size={22}
+                color={active ? '#fff' : theme.textSecondary}
+              />
+              <Text style={[s.presetName, active && s.presetNameActive]} numberOfLines={2}>
+                {d.name}
+              </Text>
+              <Text style={[s.presetWatt, active && { color: 'rgba(255,255,255,0.8)' }]}>
+                ~{d.power}W
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {customDevices.length > 0 && (
+        <View style={{ marginTop: 16 }}>
+          <Text style={[s.label, { marginBottom: 8 }]}>Pajisje të shtuara manualisht</Text>
+          {customDevices.map((d, idx) => (
+            <View key={idx} style={s.deviceRow}>
+              <Ionicons name="flash" size={18} color={theme.primary} />
+              <Text style={s.deviceRowText}>{d.name} — {d.power}W</Text>
+              <TouchableOpacity onPress={() => removeCustomDevice(idx)}>
+                <Ionicons name="close-circle" size={22} color="#EF4444" />
+              </TouchableOpacity>
             </View>
+          ))}
+        </View>
+      )}
+
+      {showManualForm ? (
+        <View style={[s.billFormBox, { marginTop: 16 }]}>
+          <Text style={[s.billFormTitle, { color: theme.textPrimary }]}>Shto pajisje manuale</Text>
+          <Text style={s.label}>Emri</Text>
+          <View style={s.inputWrapper}>
+            <Ionicons name="extension-puzzle-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
+            <TextInput
+              style={s.input}
+              placeholder="p.sh. Termopompa"
+              placeholderTextColor={theme.textMuted}
+              value={deviceDraft.name}
+              onChangeText={(v) => setDeviceDraft({ ...deviceDraft, name: v })}
+            />
           </View>
-        );
-      case 2:
-        return (
-          <View style={s.stepContent}>
-            <Text style={s.stepTitle}>Pajisjet e Tua</Text>
-            <Text style={s.stepSub}>Shto pajisjet që dëshiron t'i monitorosh. Mund të shtosh sa të duash.</Text>
-
-            {/* Lista e pajisjes të shtuara */}
-            {devices.map((d, idx) => (
-              <View key={idx} style={s.deviceRow}>
-                <Ionicons name="flash" size={18} color={theme.primary} />
-                <Text style={s.deviceRowText}>{d.name} — {d.power}W</Text>
-                <TouchableOpacity onPress={() => removeDevice(idx)}>
-                  <Ionicons name="close-circle" size={22} color="#EF4444" />
-                </TouchableOpacity>
-              </View>
-            ))}
-
-            {/* Formular për pajisje të re */}
-            <View style={[s.inputGroup, { marginTop: devices.length > 0 ? 16 : 0 }]}>
-              <Text style={s.label}>Emri i pajisjes</Text>
-              <View style={s.inputWrapper}>
-                <Ionicons name="extension-puzzle-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
-                <TextInput
-                  style={s.input}
-                  placeholder="p.sh. Kondicioneri"
-                  placeholderTextColor={theme.textMuted}
-                  value={deviceDraft.name}
-                  onChangeText={(v) => setDeviceDraft({ ...deviceDraft, name: v })}
-                />
-              </View>
-            </View>
-
-            <View style={s.inputGroup}>
-              <Text style={s.label}>Fuqia (Watt)</Text>
-              <View style={s.inputWrapper}>
-                <Ionicons name="flash-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
-                <TextInput
-                  style={s.input}
-                  placeholder="p.sh. 1500"
-                  placeholderTextColor={theme.textMuted}
-                  value={deviceDraft.power}
-                  onChangeText={(v) => setDeviceDraft({ ...deviceDraft, power: v })}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity style={s.addDeviceBtn} onPress={addDevice}>
+          <Text style={[s.label, { marginTop: 12 }]}>Fuqia (Watt)</Text>
+          <View style={s.inputWrapper}>
+            <Ionicons name="flash-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
+            <TextInput
+              style={s.input}
+              placeholder="p.sh. 1500"
+              placeholderTextColor={theme.textMuted}
+              value={deviceDraft.power}
+              onChangeText={(v) => setDeviceDraft({ ...deviceDraft, power: v })}
+              keyboardType="numeric"
+            />
+          </View>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+            <TouchableOpacity style={[s.addDeviceBtn, { flex: 1 }]} onPress={addCustomDevice}>
               <Ionicons name="add-circle-outline" size={20} color="#fff" />
-              <Text style={s.addDeviceBtnText}>Shto Pajisjen</Text>
+              <Text style={s.addDeviceBtnText}>Shto</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.addDeviceBtn, { flex: 1, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]}
+              onPress={() => setShowManualForm(false)}
+            >
+              <Text style={[s.addDeviceBtnText, { color: theme.textSecondary }]}>Anulo</Text>
             </TouchableOpacity>
           </View>
-        );
-      case 3:
-        return (
-          <View style={s.stepContent}>
-            <Text style={s.stepTitle}>Fatura juaj</Text>
-            <Text style={s.stepSub}>Futni faturën tuaj të fundit KESCO, ose mësoni si të skanoni.</Text>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={[s.outlineBtn, { marginTop: 16 }]}
+          onPress={() => setShowManualForm(true)}
+        >
+          <Ionicons name="add-circle-outline" size={18} color={theme.primary} />
+          <Text style={[s.outlineBtnText, { color: theme.primary }]}>Shto pajisje tjetër manualisht</Text>
+        </TouchableOpacity>
+      )}
 
-            {/* Udhëzues vizual */}
-            <View style={s.guideContainer}>
-              <View style={s.guideItem}>
-                <View style={s.guideNumber}><Text style={s.guideNumberText}>1</Text></View>
-                <Text style={s.guideText}>Gjeni "Gjendja e tanishme − paraprake" në faturën KESCO (A1=ditë, A2=natën).</Text>
-              </View>
-              <View style={s.guideItem}>
-                <View style={s.guideNumber}><Text style={s.guideNumberText}>2</Text></View>
-                <Text style={s.guideText}>Skanoni me kamerën te "Fatura" → "Skano", ose futni vlerat manualisht këtu poshtë.</Text>
-              </View>
-              <View style={s.guideItem}>
-                <View style={s.guideNumber}><Text style={s.guideNumberText}>3</Text></View>
-                <Text style={s.guideText}>EcoMind do të llogarisë faturën me tarifat zyrtare të KESCO-s.</Text>
-              </View>
-            </View>
+      <View style={{ height: 20 }} />
+      <Text style={s.label}>Klasa e efiçiencës (opsionale)</Text>
+      <ChipSelect
+        theme={theme}
+        options={['A+++', 'A++', 'A+', 'A', 'B', 'C', 'D', 'Nuk e di']}
+        value={klasaPajisjeve}
+        onChange={setKlasaPajisjeve}
+      />
+    </View>
+  );
 
-            {/* Futja manuale e faturës */}
-            {billSaved ? (
-              <View style={[s.billSavedBox, { backgroundColor: (theme.success || '#10B981') + '15', borderColor: theme.success || '#10B981' }]}>
-                <Ionicons name="checkmark-circle" size={28} color={theme.success || '#10B981'} />
-                <Text style={[s.billSavedText, { color: theme.textPrimary }]}>Fatura u ruajt! ({billCalc.total} € / {billCalc.totalKwh} kWh)</Text>
-              </View>
-            ) : (
-              <View style={s.billFormBox}>
-                <Text style={[s.billFormTitle, { color: theme.textPrimary }]}>Fut faturën (opsionale)</Text>
+  const renderStep5 = () => (
+    <View style={s.stepContent}>
+      <Text style={s.stepTitle}>Fatura dhe objektivat</Text>
+      <Text style={s.stepSub}>Disa detaje të fundit për t'ju dhënë rekomandime të personalizuara.</Text>
 
-                <Text style={s.label}>Muaji</Text>
-                <TouchableOpacity style={s.inputWrapper} onPress={() => setShowMonthPicker(true)}>
-                  <Ionicons name="calendar-outline" size={18} color={theme.textMuted} style={s.inputIcon} />
-                  <Text style={{ color: billMonth ? theme.textPrimary : theme.textMuted, fontSize: 15, flex: 1 }}>
-                    {billMonth || 'Zgjidh muajin…'}
-                  </Text>
-                </TouchableOpacity>
+      <Text style={s.label}>A ke tarifë me dy blloqe (ditë/natë)?</Text>
+      <ChipSelect
+        theme={theme}
+        options={['Po', 'Jo', 'Nuk e di']}
+        value={tarifaDyBlloke}
+        onChange={setTarifaDyBlloke}
+      />
 
-                <Modal visible={showMonthPicker} transparent animationType="fade" onRequestClose={() => setShowMonthPicker(false)}>
-                  <TouchableOpacity style={s.mpOverlay} activeOpacity={1} onPress={() => setShowMonthPicker(false)}>
-                    <View style={[s.mpCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                      <View style={s.mpYearRow}>
-                        <TouchableOpacity onPress={() => setPickYear(y => y - 1)}><Ionicons name="chevron-back" size={22} color={theme.textPrimary} /></TouchableOpacity>
-                        <Text style={[s.mpYear, { color: theme.textPrimary }]}>{pickYear}</Text>
-                        <TouchableOpacity onPress={() => setPickYear(y => y + 1)}><Ionicons name="chevron-forward" size={22} color={theme.textPrimary} /></TouchableOpacity>
-                      </View>
-                      <View style={s.mpGrid}>
-                        {MONTHS_SQ.map((mName, i) => (
-                          <TouchableOpacity key={i} style={[s.mpMonth, { backgroundColor: theme.background, borderColor: theme.border }]}
-                            onPress={() => { setBillMonth(`${mName} ${pickYear}`); setShowMonthPicker(false); }}>
-                            <Text style={[s.mpMonthText, { color: theme.textPrimary }]}>{mName.slice(0, 4)}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
+      <View style={[s.inputGroup, { marginTop: 20 }]}>
+        <Text style={s.label}>DPR — Shifra e konsumatorit (opsionale)</Text>
+        <View style={s.inputWrapper}>
+          <Ionicons name="barcode-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
+          <TextInput
+            style={s.input}
+            placeholder="p.sh. DPR 90050095"
+            placeholderTextColor={theme.textMuted}
+            value={dpr}
+            onChangeText={setDpr}
+            autoCapitalize="characters"
+          />
+        </View>
+      </View>
+
+      <View style={s.inputGroup}>
+        <Text style={s.label}>Fatura mesatare mujore (€ ose kWh)</Text>
+        <View style={s.inputWrapper}>
+          <Ionicons name="receipt-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
+          <TextInput
+            style={s.input}
+            placeholder="p.sh. 65"
+            placeholderTextColor={theme.textMuted}
+            value={faturaMesatare}
+            onChangeText={setFaturaMesatare}
+            keyboardType="numeric"
+          />
+        </View>
+      </View>
+
+      <Text style={s.label}>Muaji me konsum më të lartë zakonisht</Text>
+      <ChipSelect
+        theme={theme}
+        options={['Dimër (ngrohje)', 'Verë (ftohje)', 'Njësoj gjatë vitit']}
+        value={muajiKulm}
+        onChange={setMuajiKulm}
+      />
+
+      <View style={[s.inputGroup, { marginTop: 20 }]}>
+        <Text style={s.label}>Buxheti i synuar mujor (€) *</Text>
+        <View style={s.inputWrapper}>
+          <Ionicons name="wallet-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
+          <TextInput
+            style={s.input}
+            placeholder="p.sh. 50"
+            placeholderTextColor={theme.textMuted}
+            value={monthlyBudget}
+            onChangeText={setMonthlyBudget}
+            keyboardType="numeric"
+          />
+        </View>
+      </View>
+
+      <Text style={s.label}>Objektivi yt kryesor *</Text>
+      <ChipSelect
+        theme={theme}
+        options={['Ul faturën', 'Kurse energji për mjedisin', 'Kontrollo pajisjet', 'Krahasohu me të tjerët']}
+        value={objektivi}
+        onChange={setObjektivi}
+      />
+
+      <View style={{ height: 18 }} />
+      <Text style={s.label}>Sa dëshiron të kursesh?</Text>
+      <ChipSelect
+        theme={theme}
+        options={['5%', '10%', '20%', 'Sa më shumë']}
+        value={synimiKursimit}
+        onChange={setSynimiKursimit}
+      />
+
+      <View style={[s.divider, { marginVertical: 24 }]} />
+      <Text style={[s.billFormTitle, { color: theme.textPrimary, marginBottom: 4 }]}>
+        Fut faturën e fundit KESCO (opsionale)
+      </Text>
+      <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 16, lineHeight: 19 }}>
+        Mund ta skanosh te ekrani "Fatura" ose ta futësh manualisht tani. Nëse e kapërcen, analiza fillon sapo të shtosh faturën e parë.
+      </Text>
+
+      {billSaved ? (
+        <View style={[s.billSavedBox, {
+          backgroundColor: (theme.success || '#10B981') + '15',
+          borderColor: theme.success || '#10B981'
+        }]}>
+          <Ionicons name="checkmark-circle" size={28} color={theme.success || '#10B981'} />
+          <Text style={[s.billSavedText, { color: theme.textPrimary }]}>
+            Fatura u ruajt! ({billCalc.total} € — {billCalc.totalKwh} kWh)
+          </Text>
+        </View>
+      ) : (
+        <View style={s.billFormBox}>
+          <Text style={s.label}>Muaji</Text>
+          <TouchableOpacity style={s.inputWrapper} onPress={() => setShowMonthPicker(true)}>
+            <Ionicons name="calendar-outline" size={18} color={theme.textMuted} style={s.inputIcon} />
+            <Text style={{ color: billMonth ? theme.textPrimary : theme.textMuted, fontSize: 15, flex: 1 }}>
+              {billMonth || 'Zgjidh muajin…'}
+            </Text>
+          </TouchableOpacity>
+
+          <Modal visible={showMonthPicker} transparent animationType="fade" onRequestClose={() => setShowMonthPicker(false)}>
+            <TouchableOpacity style={s.mpOverlay} activeOpacity={1} onPress={() => setShowMonthPicker(false)}>
+              <View style={[s.mpCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Text style={[s.mpTitle, { color: theme.textPrimary }]}>Zgjidh vitin dhe muajin</Text>
+                <View style={s.mpYearRow}>
+                  <TouchableOpacity onPress={() => setPickYear(y => y - 1)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="chevron-back" size={22} color={theme.textPrimary} />
                   </TouchableOpacity>
-                </Modal>
-
-                <Text style={s.label}>Konsumi i Ditës — A1 (kWh)</Text>
-                <View style={s.inputWrapper}>
-                  <Ionicons name="sunny-outline" size={18} color={theme.textMuted} style={s.inputIcon} />
-                  <TextInput
-                    style={s.input}
-                    placeholder="p.sh. 809"
-                    placeholderTextColor={theme.textMuted}
-                    value={billDayKwh}
-                    onChangeText={setBillDayKwh}
-                    keyboardType="numeric"
-                  />
+                  <Text style={[s.mpYear, { color: theme.textPrimary }]}>{pickYear}</Text>
+                  <TouchableOpacity onPress={() => setPickYear(y => y + 1)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="chevron-forward" size={22} color={theme.textPrimary} />
+                  </TouchableOpacity>
                 </View>
-
-                <Text style={s.label}>Konsumi i Natës — A2 (kWh)</Text>
-                <View style={s.inputWrapper}>
-                  <Ionicons name="moon-outline" size={18} color={theme.textMuted} style={s.inputIcon} />
-                  <TextInput
-                    style={s.input}
-                    placeholder="p.sh. 149"
-                    placeholderTextColor={theme.textMuted}
-                    value={billNightKwh}
-                    onChangeText={setBillNightKwh}
-                    keyboardType="numeric"
-                  />
-                </View>
-
-                {(parseFloat(billDayKwh) + parseFloat(billNightKwh) > 0) && (
-                  <View style={[s.previewBox, { backgroundColor: (theme.primary) + '12', borderColor: theme.primary + '30' }]}>
-                    <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '700' }}>Fatura e llogaritur</Text>
-                    <Text style={{ color: theme.primary, fontSize: 28, fontWeight: '900', marginTop: 4 }}>{billCalc.total} €</Text>
-                    <Text style={{ color: theme.textSecondary, fontSize: 12, marginTop: 2 }}>{billCalc.totalKwh} kWh • Neto {billCalc.neto}€ + TVSH {billCalc.vat}€</Text>
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  style={[s.addDeviceBtn, { marginTop: 12 }]}
-                  onPress={saveOnboardingBill}
-                  disabled={billSaving}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingHorizontal: 4, paddingVertical: 2 }}
+                  style={{ marginBottom: 12, maxHeight: 44 }}
                 >
-                  {billSaving ? <ActivityIndicator color="#fff" /> : (
-                    <>
-                      <Ionicons name="save-outline" size={18} color="#fff" />
-                      <Text style={s.addDeviceBtnText}>Ruaj Faturën</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity style={{ alignItems: 'center', marginTop: 12 }} onPress={() => setStep(4)}>
-                  <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '600' }}>Anashkalo — do ta shtoj më vonë</Text>
-                </TouchableOpacity>
+                  {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                    <TouchableOpacity
+                      key={y}
+                      onPress={() => setPickYear(y)}
+                      style={[s.mpYearChip, { backgroundColor: theme.background, borderColor: theme.border },
+                        pickYear === y && { backgroundColor: theme.primary, borderColor: theme.primary }
+                      ]}
+                    >
+                      <Text style={[s.mpYearChipText, { color: pickYear === y ? '#fff' : theme.textPrimary }]}>{y}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <View style={s.mpGrid}>
+                  {MONTHS_SQ.map((mName, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      style={[s.mpMonth, { backgroundColor: theme.background, borderColor: theme.border }]}
+                      onPress={() => { setBillMonth(`${mName} ${pickYear}`); setShowMonthPicker(false); }}
+                    >
+                      <Text style={[s.mpMonthText, { color: theme.textPrimary }]}>{mName.slice(0, 4)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-            )}
+            </TouchableOpacity>
+          </Modal>
+
+          <Text style={[s.label, { marginTop: 14 }]}>Konsumi i ditës — A1 (kWh)</Text>
+          <View style={s.inputWrapper}>
+            <Ionicons name="sunny-outline" size={18} color={theme.textMuted} style={s.inputIcon} />
+            <TextInput
+              style={s.input}
+              placeholder="p.sh. 809"
+              placeholderTextColor={theme.textMuted}
+              value={billDayKwh}
+              onChangeText={setBillDayKwh}
+              keyboardType="numeric"
+            />
           </View>
-        );
-      case 4:
-        return (
-          <View style={[s.stepContent, { alignItems: 'center', justifyContent: 'center', flex: 1 }]}>
-            <View style={s.successCircle}>
-              <Ionicons name="checkmark-circle" size={100} color={theme.primary} />
+
+          <Text style={[s.label, { marginTop: 14 }]}>Konsumi i natës — A2 (kWh)</Text>
+          <View style={s.inputWrapper}>
+            <Ionicons name="moon-outline" size={18} color={theme.textMuted} style={s.inputIcon} />
+            <TextInput
+              style={s.input}
+              placeholder="p.sh. 149"
+              placeholderTextColor={theme.textMuted}
+              value={billNightKwh}
+              onChangeText={setBillNightKwh}
+              keyboardType="numeric"
+            />
+          </View>
+
+          {(parseFloat(billDayKwh) + parseFloat(billNightKwh) > 0) && (
+            <View style={[s.previewBox, { backgroundColor: theme.primary + '12', borderColor: theme.primary + '30' }]}>
+              <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '700' }}>Fatura e llogaritur</Text>
+              <Text style={{ color: theme.primary, fontSize: 28, fontWeight: '900', marginTop: 4 }}>{billCalc.total} €</Text>
+              <Text style={{ color: theme.textSecondary, fontSize: 12, marginTop: 2 }}>
+                {billCalc.totalKwh} kWh — Neto {billCalc.neto}€ + TVSH {billCalc.vat}€
+              </Text>
             </View>
-            <Text style={[s.stepTitle, { textAlign: 'center' }]}>Gati!</Text>
-            <Text style={[s.stepSub, { textAlign: 'center' }]}>Llogaria juaj është konfiguruar me sukses. Tani mund të filloni kursimin!</Text>
-          </View>
-        );
-      default:
-        return null;
+          )}
+
+          <TouchableOpacity
+            style={[s.addDeviceBtn, { marginTop: 14 }]}
+            onPress={saveOnboardingBill}
+            disabled={billSaving}
+          >
+            {billSaving ? <ActivityIndicator color="#fff" /> : (
+              <>
+                <Ionicons name="save-outline" size={18} color="#fff" />
+                <Text style={s.addDeviceBtnText}>Ruaj Faturën</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderStep = () => {
+    switch (step) {
+      case 1: return renderStep1();
+      case 2: return renderStep2();
+      case 3: return renderStep3();
+      case 4: return renderStep4();
+      case 5: return renderStep5();
+      default: return null;
     }
   };
 
+  const stepLabels = ['Banesa', 'Familja', 'Ngrohja', 'Pajisjet', 'Fatura'];
+
   return (
     <View style={s.container}>
-      <LinearGradient colors={theme.gradientPrimary} style={s.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+      <LinearGradient
+        colors={theme.gradientPrimary}
+        style={s.header}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
         <View style={s.progressContainer}>
-          {[1, 2, 3, 4].map((i) => (
-            <View key={i} style={[s.progressLine, i <= step && s.activeLine]} />
+          {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((i) => (
+            <View key={i} style={s.progressBarWrap}>
+              <View style={[s.progressLine, i <= step && s.activeLine]} />
+              <Text style={[s.progressLabel, i <= step && s.progressLabelActive]}>
+                {stepLabels[i - 1]}
+              </Text>
+            </View>
           ))}
         </View>
-        <Text style={s.headerTitle}>Hapi {step} nga 4</Text>
+        <Text style={s.headerTitle}>
+          Hapi {step} nga {TOTAL_STEPS}
+          {userName ? ` — Mirë se vjen, ${userName.split(' ')[0]}!` : ''}
+        </Text>
       </LinearGradient>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={s.scroll}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         {renderStep()}
       </ScrollView>
 
       <View style={s.footer}>
-        {step < 4 && (
+        {step > 1 && (
+          <TouchableOpacity style={s.backBtn} onPress={() => setStep(step - 1)}>
+            <Ionicons name="arrow-back" size={20} color={theme.textSecondary} />
+          </TouchableOpacity>
+        )}
+        {step < TOTAL_STEPS && (
           <TouchableOpacity style={s.skipBtn} onPress={finishOnboarding}>
             <Text style={s.skipText}>Anashkalo</Text>
           </TouchableOpacity>
         )}
-        
-        <TouchableOpacity style={s.nextBtn} onPress={handleNext} disabled={loading}>
+        <TouchableOpacity
+          style={[s.nextBtn, !canProceed() && s.nextBtnDisabled]}
+          onPress={handleNext}
+          disabled={loading}
+        >
           {loading ? <ActivityIndicator color="#fff" /> : (
             <>
-              <Text style={s.nextText}>{step === 4 ? 'Fillo tani' : 'Vazhdo'}</Text>
+              <Text style={s.nextText}>{step === TOTAL_STEPS ? 'Fillo tani' : 'Vazhdo'}</Text>
               <Ionicons name="arrow-forward" size={20} color="#fff" />
             </>
           )}
@@ -425,50 +805,94 @@ export default function OnboardingScreen({ navigation, route }) {
 
 const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
-  header: { paddingTop: 60, paddingBottom: 30, alignItems: 'center' },
-  progressContainer: { flexDirection: 'row', width: '80%', gap: 8, marginBottom: 15 },
-  progressLine: { flex: 1, height: 4, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2 },
+  header: { paddingTop: 60, paddingBottom: 24, paddingHorizontal: 20, alignItems: 'center' },
+  progressContainer: { flexDirection: 'row', width: '100%', gap: 6, marginBottom: 12 },
+  progressBarWrap: { flex: 1, alignItems: 'center', gap: 4 },
+  progressLine: { width: '100%', height: 4, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 2 },
   activeLine: { backgroundColor: '#fff' },
-  headerTitle: { color: '#fff', fontSize: 14, fontWeight: '800', opacity: 0.9 },
-  scroll: { padding: 25 },
-  stepContent: { marginTop: 10 },
-  stepTitle: { color: theme.textPrimary, fontSize: 26, fontWeight: '900', marginBottom: 10 },
-  stepSub: { color: theme.textSecondary, fontSize: 15, lineHeight: 22, marginBottom: 30 },
-  inputGroup: { marginBottom: 20 },
-  label: { color: theme.textPrimary, fontSize: 14, fontWeight: '700', marginBottom: 10, marginLeft: 5 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, borderRadius: 16, paddingHorizontal: 15, borderWidth: 1, borderColor: theme.border, height: 60 },
+  progressLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 9, fontWeight: '700' },
+  progressLabelActive: { color: 'rgba(255,255,255,0.95)' },
+  headerTitle: { color: '#fff', fontSize: 13, fontWeight: '800', opacity: 0.9 },
+  scroll: { padding: 24, paddingBottom: 40 },
+  stepContent: { marginTop: 8 },
+  stepTitle: { color: theme.textPrimary, fontSize: 26, fontWeight: '900', marginBottom: 8 },
+  stepSub: { color: theme.textSecondary, fontSize: 15, lineHeight: 22, marginBottom: 24 },
+  inputGroup: { marginTop: 20, marginBottom: 0 },
+  label: { color: theme.textPrimary, fontSize: 14, fontWeight: '700', marginBottom: 8, marginLeft: 2 },
+  inputWrapper: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card,
+    borderRadius: 16, paddingHorizontal: 15, borderWidth: 1, borderColor: theme.border, height: 56,
+  },
   inputIcon: { marginRight: 12 },
-  input: { flex: 1, color: theme.textPrimary, fontSize: 16 },
-  deviceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.card, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 12, marginBottom: 10, borderWidth: 1, borderColor: theme.primary + '40' },
+  input: { flex: 1, color: theme.textPrimary, fontSize: 15 },
+  presetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
+  presetCard: {
+    width: '30%', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8,
+    backgroundColor: theme.card, borderRadius: 16, borderWidth: 1.5, borderColor: theme.border, gap: 6,
+  },
+  presetCardActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  presetName: { color: theme.textSecondary, fontSize: 11, fontWeight: '600', textAlign: 'center', lineHeight: 14 },
+  presetNameActive: { color: '#fff' },
+  presetWatt: { color: theme.textMuted, fontSize: 10 },
+  deviceRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.card,
+    borderRadius: 14, paddingHorizontal: 15, paddingVertical: 12, marginBottom: 8,
+    borderWidth: 1, borderColor: theme.primary + '40',
+  },
   deviceRowText: { flex: 1, color: theme.textPrimary, fontSize: 14, fontWeight: '600' },
-  addDeviceBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, borderRadius: 14, height: 50 },
+  addDeviceBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: theme.primary, borderRadius: 14, height: 50,
+  },
   addDeviceBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  guideContainer: { gap: 15, marginBottom: 30 },
-  guideItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, padding: 15, borderRadius: 15, borderWidth: 1, borderColor: theme.border },
-  guideNumber: { width: 28, height: 28, borderRadius: 14, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  guideNumberText: { color: '#fff', fontWeight: '800', fontSize: 14 },
-  guideText: { color: theme.textPrimary, fontSize: 14, flex: 1, lineHeight: 20 },
-  illustrationPlaceholder: { height: 180, borderRadius: 20, overflow: 'hidden', marginTop: 10 },
-  illuGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  illuText: { color: theme.primary, fontWeight: '700', marginTop: 10 },
-  successCircle: { marginBottom: 20 },
-  footer: { padding: 25, paddingBottom: Platform.OS === 'ios' ? 40 : 25, flexDirection: 'row', alignItems: 'center', gap: 15 },
-  nextBtn: { flex: 2, backgroundColor: theme.primary, borderRadius: 18, height: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
-  nextText: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  skipBtn: { flex: 1, height: 60, alignItems: 'center', justifyContent: 'center' },
-  skipText: { color: theme.textSecondary, fontWeight: '700', fontSize: 16 },
-  // Bill form styles (step 3)
-  billFormBox: { backgroundColor: theme.card, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: theme.border, marginTop: 4 },
+  outlineBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, borderRadius: 14, height: 48, borderWidth: 1.5,
+    borderColor: theme.primary, backgroundColor: theme.primary + '10',
+  },
+  outlineBtnText: { fontSize: 14, fontWeight: '700' },
+  billFormBox: {
+    backgroundColor: theme.card, borderRadius: 20, padding: 18,
+    borderWidth: 1, borderColor: theme.border, marginTop: 4,
+  },
   billFormTitle: { fontSize: 16, fontWeight: '800', marginBottom: 16 },
-  billSavedBox: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, borderWidth: 1.5, marginTop: 8 },
+  billSavedBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 16, borderRadius: 16, borderWidth: 1.5, marginTop: 8,
+  },
   billSavedText: { fontSize: 14, fontWeight: '700', flex: 1 },
   previewBox: { borderRadius: 16, padding: 16, alignItems: 'center', marginTop: 14, borderWidth: 1 },
-  // Month picker styles
+  divider: { height: 1, backgroundColor: theme.border },
   mpOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 30 },
   mpCard: { borderRadius: 24, padding: 20, borderWidth: 1 },
-  mpYearRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingHorizontal: 10 },
+  mpTitle: { fontSize: 15, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
+  mpYearRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingHorizontal: 10 },
   mpYear: { fontSize: 20, fontWeight: '800' },
+  mpYearChip: { paddingHorizontal: 14, height: 34, borderRadius: 17, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  mpYearChipText: { fontSize: 13, fontWeight: '700' },
   mpGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
   mpMonth: { width: '30%', paddingVertical: 12, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
   mpMonthText: { fontSize: 13, fontWeight: '600' },
+  footer: {
+    padding: 20, paddingBottom: Platform.OS === 'ios' ? 38 : 20,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderTopWidth: 1, borderTopColor: theme.border,
+    backgroundColor: theme.background,
+  },
+  backBtn: {
+    width: 50, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border,
+  },
+  skipBtn: { height: 56, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
+  skipText: { color: theme.textMuted, fontWeight: '700', fontSize: 14 },
+  nextBtn: {
+    flex: 1, backgroundColor: theme.primary, borderRadius: 18, height: 56,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+  },
+  nextBtnDisabled: { opacity: 0.55 },
+  nextText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  successCircle: { marginBottom: 20 },
 });
+

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, RefreshControl, Dimensions, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ActivityIndicator, RefreshControl, Dimensions, Platform, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -32,6 +32,17 @@ const getEnergyClass = (kwh) => {
   return { cls: 'D', color: '#DC2626' };
 };
 
+// Klasifikimi i efiçiencës sipas konsumit mujor (kWh) — për info-point te Dashboard
+const ENERGY_CLASSES = [
+  { cls: 'A+++', range: '≤ 100 kWh', color: '#10B981' },
+  { cls: 'A++', range: '101–150 kWh', color: '#22C55E' },
+  { cls: 'A+', range: '151–200 kWh', color: '#84CC16' },
+  { cls: 'A', range: '201–300 kWh', color: '#EAB308' },
+  { cls: 'B', range: '301–400 kWh', color: '#F97316' },
+  { cls: 'C', range: '401–500 kWh', color: '#EF4444' },
+  { cls: 'D', range: '> 500 kWh', color: '#DC2626' },
+];
+
 export default function DashboardScreen({ navigation }) {
   const { theme, isDarkMode } = useTheme();
   const s = styles(theme);
@@ -39,6 +50,7 @@ export default function DashboardScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userName, setUserName] = useState('');
+  const [showClassInfo, setShowClassInfo] = useState(false);
   const [stats, setStats] = useState({
     totalUsage: 0,
     monthlyBill: 0,
@@ -54,6 +66,7 @@ export default function DashboardScreen({ navigation }) {
     activeGoal: null,
     activeChallenge: null,
     budgetWarning: false,
+    hasData: false,
   });
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -61,8 +74,10 @@ export default function DashboardScreen({ navigation }) {
   const fetchData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const uid = await AsyncStorage.getItem('user_id');
-      const name = await AsyncStorage.getItem('user_name');
+      const [uid, name] = await Promise.all([
+        AsyncStorage.getItem('user_id'),
+        AsyncStorage.getItem('user_name'),
+      ]);
       setUserName(name || '');
 
       if (!uid) {
@@ -70,19 +85,33 @@ export default function DashboardScreen({ navigation }) {
         return;
       }
 
+      // Marrim TË GJITHA të dhënat njëkohësisht (paralelisht) — jo një nga një.
+      // Kjo e shpejton ndjeshëm hapjen e Dashboard-it pas kyçjes: dy pyetjet
+      // Supabase (bills + devices) dhe leximet lokale kryhen në të njëjtën kohë,
+      // në vend që të presin radhazi (çka e bënte ndjesinë "kyçja është e ngadaltë").
+      const [
+        billsRes,
+        devicesRes,
+        houseUid, houseGlobal,
+        goalsUid, goalsGlobal,
+        inProgressRaw,
+        completedRaw,
+      ] = await Promise.all([
+        supabase.from('bills').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
+        supabase.from('devices').select('*').eq('user_id', uid),
+        AsyncStorage.getItem(`${uid}_house_data`),
+        AsyncStorage.getItem('house_data'),
+        AsyncStorage.getItem(`${uid}_user_goals`),
+        AsyncStorage.getItem('user_goals'),
+        AsyncStorage.getItem(`${uid}_in_progress_challenges`),
+        AsyncStorage.getItem(`${uid}_completed_challenges`),
+      ]);
+
       // 1. Bills
-      const { data: bills } = await supabase
-        .from('bills')
-        .select('*')
-        .eq('user_id', uid)
-        .order('created_at', { ascending: false });
+      const bills = billsRes?.data;
 
       // 2. Devices (ALL — parse status from type suffix)
-      const { data: rawDevices } = await supabase
-        .from('devices')
-        .select('*')
-        .eq('user_id', uid);
-
+      const rawDevices = devicesRes?.data;
       const devices = (rawDevices || []).map(d => {
         const isOn = d.type ? d.type.endsWith('_on') : false;
         const baseType = d.type ? d.type.replace(/_(on|off)$/, '') : d.type;
@@ -90,7 +119,7 @@ export default function DashboardScreen({ navigation }) {
       });
 
       // 3. House data / budget
-      const houseDataStr = await AsyncStorage.getItem(`${uid}_house_data`) || await AsyncStorage.getItem('house_data');
+      const houseDataStr = houseUid || houseGlobal;
       const houseData = houseDataStr ? JSON.parse(houseDataStr) : null;
       const budgetEuro = houseData ? parseInt(houseData.buxheti.replace(/[^0-9]/g, '')) : 50;
       const targetKwh = Math.round(budgetEuro / 0.07) || 400;
@@ -118,20 +147,22 @@ export default function DashboardScreen({ navigation }) {
       const euroSaved = Math.max(0, parseFloat(((avgKwh - lastKwh) * 0.07).toFixed(2)));
 
       // 7. Active AI goal (newest from user goals)
-      const goalsRaw = await AsyncStorage.getItem(`${uid}_user_goals`) || await AsyncStorage.getItem('user_goals');
+      const goalsRaw = goalsUid || goalsGlobal;
       const allGoals = goalsRaw ? JSON.parse(goalsRaw) : [];
       const activeGoal = allGoals.length > 0 ? allGoals[allGoals.length - 1] : null;
 
       // 8. Active challenge
-      const inProgressRaw = await AsyncStorage.getItem(`${uid}_in_progress_challenges`);
       const inProgress = inProgressRaw ? JSON.parse(inProgressRaw) : [];
-      const completedRaw = await AsyncStorage.getItem(`${uid}_completed_challenges`);
       const completed = completedRaw ? JSON.parse(completedRaw) : [];
       // First non-completed in-progress challenge
       const activeChallenge = inProgress.find(c => !completed.includes(c.id)) || null;
 
       // 9. Budget warning
       const budgetWarning = lastAmount > budgetEuro;
+
+      // A ka dhënë përdoruesi ndonjë të dhënë reale? (faturë ose pajisje)
+      // Nëse jo, nuk shfaqet asnjë analizë/parashikim/impakt — vetëm ftesa për të filluar.
+      const hasData = (bills && bills.length > 0) || devices.length > 0;
 
       setStats({
         totalUsage: lastKwh,
@@ -148,6 +179,7 @@ export default function DashboardScreen({ navigation }) {
         activeGoal,
         activeChallenge,
         budgetWarning,
+        hasData,
       });
     } catch (e) {
       console.log(e);
@@ -203,15 +235,21 @@ export default function DashboardScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
+          {stats.hasData ? (
           <Animated.View style={[s.mainCard, { opacity: fadeAnim }]}>
             <View style={s.cardTop}>
               <View>
                 <Text style={s.cardLabel}>{stats.estimated ? 'KONSUMI (VLERËSIM)' : 'KONSUMI JUAJ'}</Text>
                 <Text style={s.cardValue}>{stats.totalUsage} <Text style={s.cardUnit}>kWh</Text></Text>
               </View>
-              <View style={[s.cardBadge, { backgroundColor: energyColor + '25' }]}>
+              <TouchableOpacity
+                style={[s.cardBadge, { backgroundColor: energyColor + '25', flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                onPress={() => setShowClassInfo(true)}
+                activeOpacity={0.7}
+              >
                 <Text style={[s.badgeText, { color: energyColor }]}>Klasa {energyClass}</Text>
-              </View>
+                <Ionicons name="information-circle-outline" size={14} color={energyColor} />
+              </TouchableOpacity>
             </View>
 
             <View style={s.progressBarBase}>
@@ -226,6 +264,15 @@ export default function DashboardScreen({ navigation }) {
             </View>
             {stats.estimated && <Text style={s.estNote}>Vlerësim nga pajisjet — shto faturë për shifra të sakta.</Text>}
           </Animated.View>
+          ) : (
+          <Animated.View style={[s.mainCard, { opacity: fadeAnim }]}>
+            <Text style={s.cardLabel}>MIRË SE VINI</Text>
+            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800', marginTop: 8 }}>Ende s'ka të dhëna</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 6, lineHeight: 18 }}>
+              Shto faturën ose pajisjet për të parë konsumin, analizat dhe impaktin tuaj.
+            </Text>
+          </Animated.View>
+          )}
         </LinearGradient>
 
         <View style={s.body}>
@@ -237,6 +284,8 @@ export default function DashboardScreen({ navigation }) {
             <QuickAction icon="game-controller-outline" label="Luaj" color="#FF3366" onPress={() => navigation.navigate('Gamification')} theme={theme} />
           </View>
 
+          {stats.hasData ? (
+          <>
           {/* Stats Grid */}
           <Text style={s.sectionTitle}>Të dhënat tuaja</Text>
           <View style={s.statsGrid}>
@@ -356,11 +405,50 @@ export default function DashboardScreen({ navigation }) {
               <Ionicons name="earth" size={80} color="rgba(255,255,255,0.05)" style={s.earthIcon} />
             </LinearGradient>
           </TouchableOpacity>
+          </>
+          ) : (
+            <View style={s.emptyStateCard}>
+              <Ionicons name="documents-outline" size={40} color={theme.textMuted} />
+              <Text style={s.emptyStateTitle}>Ende s'ka të dhëna për të shfaqur</Text>
+              <Text style={s.emptyStateSub}>Analizat, parashikimet dhe impakti shfaqen sapo të shtoni faturën ose pajisjet tuaja.</Text>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 18, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <TouchableOpacity style={s.emptyBtn} onPress={() => navigation.navigate('Bills')} activeOpacity={0.85}>
+                  <Ionicons name="add" size={18} color="#fff" />
+                  <Text style={s.emptyBtnText}>Shto faturë</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.emptyBtn, { backgroundColor: '#10B981' }]} onPress={() => navigation.navigate('Devices')} activeOpacity={0.85}>
+                  <Ionicons name="hardware-chip-outline" size={18} color="#fff" />
+                  <Text style={s.emptyBtnText}>Shto pajisje</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           <Text style={{ textAlign: 'center', color: theme.textMuted, fontSize: 10, marginBottom: 20, marginTop: 8 }}>EcoMind AI+ v2.3</Text>
           <View style={{ height: 120 }} />
         </View>
       </ScrollView>
+
+      {/* Info-point: si klasifikohet efiçienca e shtëpisë (A+++…D) */}
+      <Modal visible={showClassInfo} transparent animationType="fade" onRequestClose={() => setShowClassInfo(false)}>
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setShowClassInfo(false)}>
+          <View style={s.modalContent}>
+            <Text style={s.modalTitle}>Klasa e energjisë së shtëpisë</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 12, marginBottom: 14, lineHeight: 18 }}>
+              Klasa përcaktohet nga konsumi juaj total mujor (kWh): nga A+++ (shumë efiçient) te D (konsum i lartë). Sa më i ulët konsumi, aq më e mirë klasa.
+            </Text>
+            {ENERGY_CLASSES.map(c => (
+              <View key={c.cls} style={s.classRow}>
+                <View style={[s.classBadge, { backgroundColor: c.color }]}><Text style={s.classBadgeText}>{c.cls}</Text></View>
+                <Text style={s.classRange}>{c.range}</Text>
+              </View>
+            ))}
+            <TouchableOpacity style={[s.classCloseBtn, { marginTop: 16 }]} onPress={() => setShowClassInfo(false)}>
+              <Text style={s.classCloseText}>Mbylle</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -411,4 +499,20 @@ const styles = (theme) => StyleSheet.create({
   impactDivider: { width: 1, height: 50, backgroundColor: 'rgba(255,255,255,0.1)' },
   impactDesc: { color: 'rgba(255,255,255,0.5)', fontSize: 10, textAlign: 'center', marginTop: 4 },
   earthIcon: { position: 'absolute', right: -20, bottom: -20 },
+  // Empty state (kur s'ka të dhëna)
+  emptyStateCard: { backgroundColor: theme.card, borderRadius: 24, borderWidth: 1, borderColor: theme.border, padding: 28, alignItems: 'center', marginTop: 4 },
+  emptyStateTitle: { color: theme.textPrimary, fontSize: 16, fontWeight: '800', marginTop: 12, textAlign: 'center' },
+  emptyStateSub: { color: theme.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 6, lineHeight: 19 },
+  emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.primary, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 14 },
+  emptyBtnText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  // Info-modal i klasës së energjisë
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 },
+  modalContent: { backgroundColor: theme.card, borderRadius: 24, padding: 25 },
+  modalTitle: { color: theme.textPrimary, fontSize: 18, fontWeight: '800', marginBottom: 12 },
+  classRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
+  classBadge: { width: 46, paddingVertical: 4, borderRadius: 8, alignItems: 'center' },
+  classBadgeText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  classRange: { color: theme.textSecondary, fontSize: 13 },
+  classCloseBtn: { backgroundColor: theme.primary, borderRadius: 12, padding: 15, alignItems: 'center' },
+  classCloseText: { color: '#fff', fontWeight: '800' },
 });

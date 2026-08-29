@@ -200,11 +200,19 @@ export default function BillScanScreen() {
                 <Modal visible={showMonthPicker} transparent animationType="fade" onRequestClose={() => setShowMonthPicker(false)}>
                   <TouchableOpacity style={s.mpOverlay} activeOpacity={1} onPress={() => setShowMonthPicker(false)}>
                     <View style={s.mpCard}>
+                      <Text style={s.mpTitle}>Zgjidh vitin dhe muajin</Text>
                       <View style={s.mpYearRow}>
-                        <TouchableOpacity onPress={() => setPickYear((y) => y - 1)}><Ionicons name="chevron-back" size={22} color={theme.textPrimary} /></TouchableOpacity>
+                        <TouchableOpacity onPress={() => setPickYear((y) => y - 1)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Ionicons name="chevron-back" size={22} color={theme.textPrimary} /></TouchableOpacity>
                         <Text style={s.mpYear}>{pickYear}</Text>
-                        <TouchableOpacity onPress={() => setPickYear((y) => y + 1)}><Ionicons name="chevron-forward" size={22} color={theme.textPrimary} /></TouchableOpacity>
+                        <TouchableOpacity onPress={() => setPickYear((y) => y + 1)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Ionicons name="chevron-forward" size={22} color={theme.textPrimary} /></TouchableOpacity>
                       </View>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 4, paddingVertical: 2 }} style={{ marginBottom: 12, maxHeight: 44 }}>
+                        {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                          <TouchableOpacity key={y} onPress={() => setPickYear(y)} style={[s.mpYearChip, pickYear === y && s.mpYearChipActive]}>
+                            <Text style={[s.mpYearChipText, pickYear === y && { color: '#fff' }]}>{y}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
                       <View style={s.mpGrid}>
                         {MONTHS_SQ.map((mName, i) => (
                           <TouchableOpacity key={i} style={s.mpMonth} onPress={() => { setMonth(`${mName} ${pickYear}`); setShowMonthPicker(false); }}>
@@ -284,8 +292,12 @@ const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   mpOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 30 },
   mpCard: { backgroundColor: theme.card, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: theme.border },
-  mpYearRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingHorizontal: 10 },
+  mpTitle: { color: theme.textPrimary, fontSize: 15, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
+  mpYearRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingHorizontal: 10 },
   mpYear: { color: theme.textPrimary, fontSize: 20, fontWeight: '800' },
+  mpYearChip: { paddingHorizontal: 14, height: 34, borderRadius: 17, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' },
+  mpYearChipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  mpYearChipText: { color: theme.textPrimary, fontSize: 13, fontWeight: '700' },
   mpGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
   mpMonth: { width: '30%', paddingVertical: 12, borderRadius: 12, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, alignItems: 'center' },
   mpMonthText: { color: theme.textPrimary, fontSize: 13, fontWeight: '600' },
