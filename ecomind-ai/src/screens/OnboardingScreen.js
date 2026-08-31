@@ -226,7 +226,6 @@ export default function OnboardingScreen({ navigation, route }) {
         dpr: dpr.trim() || null,
       };
 
-      await AsyncStorage.setItem('last_bill', JSON.stringify(billObj));
       if (uid) {
         await AsyncStorage.setItem(`${uid}_last_bill`, JSON.stringify(billObj));
         await supabase.from('bills').insert([billObj]);
@@ -271,18 +270,16 @@ export default function OnboardingScreen({ navigation, route }) {
         synimiKursimit: synimiKursimit || '10%',
       };
 
+      // Të dhënat e shtëpisë ruhen VETËM per-user (pa kopje globale)
       const houseKey = uid ? `${uid}_house_data` : 'house_data';
       await AsyncStorage.setItem(houseKey, JSON.stringify(houseData));
-      await AsyncStorage.setItem('house_data', JSON.stringify(houseData));
 
-      // 2. Ruajtja e Buxhetit dhe DPR
-      if (monthlyBudget) {
-        await AsyncStorage.setItem('monthly_budget', monthlyBudget);
-        if (uid) await AsyncStorage.setItem(`${uid}_monthly_budget`, monthlyBudget);
+      // 2. Ruajtja e Buxhetit dhe DPR (per-user)
+      if (monthlyBudget && uid) {
+        await AsyncStorage.setItem(`${uid}_monthly_budget`, monthlyBudget);
       }
-      if (dpr) {
-        await AsyncStorage.setItem('user_dpr', dpr);
-        if (uid) await AsyncStorage.setItem(`${uid}_user_dpr`, dpr);
+      if (dpr && uid) {
+        await AsyncStorage.setItem(`${uid}_user_dpr`, dpr);
       }
 
       // 3. Ruajtja e Objektivave (Goals) direkt për ekranin GoalsScreen & Dashboard
@@ -298,7 +295,6 @@ export default function OnboardingScreen({ navigation, route }) {
       ];
       const goalsKey = uid ? `${uid}_user_goals` : 'user_goals';
       await AsyncStorage.setItem(goalsKey, JSON.stringify(initialGoalList));
-      await AsyncStorage.setItem('user_goals', JSON.stringify(initialGoalList));
 
       // 4. Ruajtja e Pajisjeve (me type të saktë me suffix _on, në Supabase dhe AsyncStorage fallback)
       const rawDevices = [
@@ -319,7 +315,6 @@ export default function OnboardingScreen({ navigation, route }) {
         status: true,
       }));
 
-      await AsyncStorage.setItem('user_devices', JSON.stringify(formattedLocalDevices));
       if (uid) {
         await AsyncStorage.setItem(`${uid}_user_devices`, JSON.stringify(formattedLocalDevices));
         const dbRows = allDevices.map((d) => ({
@@ -348,7 +343,6 @@ export default function OnboardingScreen({ navigation, route }) {
           user_id: uid || null,
           dpr: dpr.trim() || null,
         };
-        await AsyncStorage.setItem('last_bill', JSON.stringify(initBill));
         if (uid) {
           await AsyncStorage.setItem(`${uid}_last_bill`, JSON.stringify(initBill));
           try {
@@ -357,7 +351,7 @@ export default function OnboardingScreen({ navigation, route }) {
         }
       }
 
-      await AsyncStorage.setItem('onboarding_complete', 'true');
+      if (uid) await AsyncStorage.setItem(`${uid}_onboarding_complete`, 'true');
       if (uid) await AsyncStorage.setItem('user_id', uid.toString());
 
       navigation.replace('Main');

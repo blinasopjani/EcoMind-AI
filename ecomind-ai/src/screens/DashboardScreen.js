@@ -92,8 +92,8 @@ export default function DashboardScreen({ navigation }) {
       const [
         billsRes,
         devicesRes,
-        houseUid, houseGlobal,
-        goalsUid, goalsGlobal,
+        houseUid,
+        goalsUid,
         inProgressRaw,
         completedRaw,
         lastBillRaw,
@@ -102,13 +102,11 @@ export default function DashboardScreen({ navigation }) {
         supabase.from('bills').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
         supabase.from('devices').select('*').eq('user_id', uid),
         AsyncStorage.getItem(`${uid}_house_data`),
-        AsyncStorage.getItem('house_data'),
         AsyncStorage.getItem(`${uid}_user_goals`),
-        AsyncStorage.getItem('user_goals'),
         AsyncStorage.getItem(`${uid}_in_progress_challenges`),
         AsyncStorage.getItem(`${uid}_completed_challenges`),
-        AsyncStorage.getItem('last_bill'),
-        AsyncStorage.getItem('user_devices'),
+        AsyncStorage.getItem(`${uid}_last_bill`),
+        AsyncStorage.getItem(`${uid}_user_devices`),
       ]);
 
       // 1. Bills (with AsyncStorage fallback)
@@ -139,8 +137,8 @@ export default function DashboardScreen({ navigation }) {
         return { ...d, isOn, baseType };
       });
 
-      // 3. House data / budget
-      const houseDataStr = houseUid || houseGlobal;
+      // 3. House data / budget (vetëm per-user, pa fallback global)
+      const houseDataStr = houseUid;
       const houseData = houseDataStr ? JSON.parse(houseDataStr) : null;
       const budgetEuro = houseData ? parseInt(houseData.buxheti.replace(/[^0-9]/g, '')) : 50;
       const targetKwh = Math.round(budgetEuro / 0.07) || 400;
@@ -167,8 +165,8 @@ export default function DashboardScreen({ navigation }) {
       const co2Saved = Math.max(0, parseFloat(((avgKwh - lastKwh) * 0.4).toFixed(1)));
       const euroSaved = Math.max(0, parseFloat(((avgKwh - lastKwh) * 0.07).toFixed(2)));
 
-      // 7. Active AI goal (newest from user goals)
-      const goalsRaw = goalsUid || goalsGlobal;
+      // 7. Active AI goal (newest from user goals) — vetëm per-user
+      const goalsRaw = goalsUid;
       const allGoals = goalsRaw ? JSON.parse(goalsRaw) : [];
       const activeGoal = allGoals.length > 0 ? allGoals[allGoals.length - 1] : null;
 

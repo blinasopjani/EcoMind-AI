@@ -44,6 +44,7 @@ export default function NotificationsScreen({ navigation }) {
     setLoading(true);
     const list = [];
     try {
+      const uid = await AsyncStorage.getItem('user_id'); // për çelësat lokalë per-user
       // Të dhënat reale: faturat dhe pajisjet (RLS i kufizon te përdoruesi aktual)
       const { data: bills } = await supabase.from('bills').select('*').order('created_at', { ascending: false });
       const { data: devices } = await supabase.from('devices').select('*');
@@ -94,7 +95,7 @@ export default function NotificationsScreen({ navigation }) {
 
         // 2) Krahasimi me buxhetin e synuar (nga onboarding-u, ruajtur lokalisht)
         try {
-          const houseStr = await AsyncStorage.getItem('house_data');
+          const houseStr = uid ? await AsyncStorage.getItem(`${uid}_house_data`) : null;
           const house = houseStr ? JSON.parse(houseStr) : null;
           const budget = house?.buxheti ? parseInt(String(house.buxheti).replace(/[^0-9]/g, ''), 10) : null;
           if (budget && last.amount != null) {
@@ -141,7 +142,7 @@ export default function NotificationsScreen({ navigation }) {
 
       // 4) Progresi i lojës (pikët/niveli, ruajtur lokalisht)
       try {
-        const pts = await AsyncStorage.getItem('user_points');
+        const pts = uid ? await AsyncStorage.getItem(`${uid}_points`) : null;
         if (pts && parseInt(pts, 10) > 0) {
           const p = parseInt(pts, 10);
           const level = Math.floor(p / 1000) + 1;

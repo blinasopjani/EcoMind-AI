@@ -69,16 +69,17 @@ export default function SettingsScreen({ navigation }) {
         if (authData?.user?.email) authEmail = authData.user.email;
       } catch (_) {}
 
-      // 3. Merr të dhënat e shtëpisë (me user_id prefix)
-      const houseData = await AsyncStorage.getItem(`${uid}_house_data`) || await AsyncStorage.getItem('house_data');
+      // 3. Merr të dhënat e shtëpisë — VETËM me prefiksin e këtij përdoruesi
+      // (pa fallback global, që një llogari e re të mos trashëgojë të dhënat e tjetrit)
+      const houseData = await AsyncStorage.getItem(`${uid}_house_data`);
       const parsedHouse = houseData ? JSON.parse(houseData) : null;
 
       // 4. Statistika: nr. pajisjesh + fatura e fundit
       const { data: devicesData } = await supabase.from('devices').select('id').eq('user_id', uid);
       const { data: billsData } = await supabase.from('bills').select('amount, kwh, created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(1);
 
-      // 5. Shpërblimet e fituara
-      const redeemed = JSON.parse((await AsyncStorage.getItem('redeemed_rewards')) || '[]');
+      // 5. Shpërblimet e fituara — PËR KËTË USER (jo globale)
+      const redeemed = JSON.parse((await AsyncStorage.getItem(`${uid}_redeemed_rewards`)) || '[]');
       setRedeemedRewards(redeemed);
 
       setStats({
@@ -134,7 +135,7 @@ export default function SettingsScreen({ navigation }) {
     try {
       const uid = await AsyncStorage.getItem('user_id');
       const key = uid ? `${uid}_house_data` : 'house_data';
-      const houseData = JSON.parse((await AsyncStorage.getItem(key)) || (await AsyncStorage.getItem('house_data')) || '{}');
+      const houseData = JSON.parse((await AsyncStorage.getItem(key)) || '{}');
       houseData.buxheti = `${budgetVal}€`;
       await AsyncStorage.setItem(key, JSON.stringify(houseData));
       setUserData(prev => ({ ...prev, buxheti: `${budgetVal}€` }));

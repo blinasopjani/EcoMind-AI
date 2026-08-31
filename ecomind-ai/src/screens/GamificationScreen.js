@@ -353,10 +353,13 @@ export default function GamificationScreen() {
             if (userId) {
               const keys = getKeys(userId);
               await AsyncStorage.setItem(keys.points, newPoints.toString());
+              // Shpërblimet e shkëmbyera ruhen PËR ÇDO USER veç e veç (jo globalisht),
+              // që një llogari e re të mos shohë shpërblimet e një përdoruesi tjetër.
+              const rk = `${userId}_redeemed_rewards`;
+              const redeemed = JSON.parse((await AsyncStorage.getItem(rk)) || '[]');
+              redeemed.push({ title, code, at: new Date().toISOString() });
+              await AsyncStorage.setItem(rk, JSON.stringify(redeemed));
             }
-            const redeemed = JSON.parse((await AsyncStorage.getItem('redeemed_rewards')) || '[]');
-            redeemed.push({ title, code, at: new Date().toISOString() });
-            await AsyncStorage.setItem('redeemed_rewards', JSON.stringify(redeemed));
 
             const nextIdx = rewardCursor % REWARDS_CATALOG.length;
             const replacement = { ...REWARDS_CATALOG[nextIdx], id: `${REWARDS_CATALOG[nextIdx].id}_${Date.now()}` };

@@ -109,7 +109,7 @@ export default function DevicesScreen() {
       }
 
       if (dbDevices.length === 0) {
-        const localRaw = (await AsyncStorage.getItem(`${uid}_user_devices`)) || (await AsyncStorage.getItem('user_devices'));
+        const localRaw = uid ? await AsyncStorage.getItem(`${uid}_user_devices`) : null;
         if (localRaw) {
           const parsedLocal = JSON.parse(localRaw);
           if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {

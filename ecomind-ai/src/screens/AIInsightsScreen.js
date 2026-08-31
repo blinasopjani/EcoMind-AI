@@ -41,9 +41,10 @@ export default function AIInsightsScreen() {
       const uid = await AsyncStorage.getItem('user_id');
       const { data: bills } = await supabase.from('bills').select('*').order('created_at', { ascending: false });
       const { data: devices } = await supabase.from('devices').select('*');
-      const houseStr = (await AsyncStorage.getItem(`${uid}_house_data`)) || (await AsyncStorage.getItem('house_data'));
-      const localDevsStr = (await AsyncStorage.getItem(`${uid}_user_devices`)) || (await AsyncStorage.getItem('user_devices'));
-      const lastBillStr = (await AsyncStorage.getItem(`${uid}_last_bill`)) || (await AsyncStorage.getItem('last_bill'));
+      // Vetëm çelësat e këtij përdoruesi (pa fallback global — që një user të mos shohë të dhënat e tjetrit)
+      const houseStr = uid ? await AsyncStorage.getItem(`${uid}_house_data`) : null;
+      const localDevsStr = uid ? await AsyncStorage.getItem(`${uid}_user_devices`) : null;
+      const lastBillStr = uid ? await AsyncStorage.getItem(`${uid}_last_bill`) : null;
 
       let finalBills = bills || [];
       if (finalBills.length === 0 && lastBillStr) {
