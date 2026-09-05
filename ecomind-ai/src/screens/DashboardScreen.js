@@ -67,6 +67,8 @@ export default function DashboardScreen({ navigation }) {
     activeChallenge: null,
     budgetWarning: false,
     hasData: false,
+    forecast: 0,
+    dailyTip: null,
   });
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -183,6 +185,26 @@ export default function DashboardScreen({ navigation }) {
       // Nëse jo, nuk shfaqet asnjë analizë/parashikim/impakt - vetëm ftesa për të filluar.
       const hasData = (bills && bills.length > 0) || devices.length > 0;
 
+      // Parashikimi i faturës së ardhshme (mesatarja e faturave të fundit, ose vlerësimi)
+      let forecast = 0;
+      if (bills && bills.length > 0) {
+        const recent = bills.slice(0, 3).map(b => b.amount || 0).filter(x => x > 0);
+        forecast = recent.length ? recent.reduce((a, b) => a + b, 0) / recent.length : lastAmount;
+      } else if (devices.length > 0) {
+        forecast = lastAmount;
+      }
+      forecast = parseFloat((forecast || 0).toFixed(2));
+
+      // Këshilla e ditës - nga të dhënat reale; rrotullohet çdo ditë
+      const tips = [];
+      if (topDevice) tips.push(`"${topDevice.name}" është pajisja jote më harxhuese - përdore natën, ku tarifa (A2) është më e lirë.`);
+      if (budgetWarning) tips.push('Fatura po tejkalon buxhetin - ul konsumin ose rrit buxhetin te Cilësimet.');
+      tips.push('Zhvendos lavatriçen dhe enëlarësen pas orës 22:00 për tarifën e lirë të natës.');
+      tips.push('Fike pajisjet nga priza kur nuk i përdor - konsumojnë rrymë edhe në standby.');
+      tips.push('Mbaje kondicionerin në 24°C - çdo gradë më poshtë rrit konsumin ~8%.');
+      tips.push('Kalo te dritat LED - harxhojnë deri 80% më pak se llambat e vjetra.');
+      const dailyTip = tips[Math.floor(Date.now() / 86400000) % tips.length];
+
       setStats({
         totalUsage: lastKwh,
         monthlyBill: lastAmount,
@@ -199,6 +221,8 @@ export default function DashboardScreen({ navigation }) {
         activeChallenge,
         budgetWarning,
         hasData,
+        forecast,
+        dailyTip,
       });
     } catch (e) {
       console.log(e);
@@ -310,6 +334,29 @@ export default function DashboardScreen({ navigation }) {
 
           {stats.hasData ? (
           <>
+          {/* Këshilla e ditës */}
+          {stats.dailyTip ? (
+            <View style={s.tipCard}>
+              <View style={s.tipIcon}><Ionicons name="bulb" size={18} color="#F59E0B" /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.tipLabel}>Këshilla e ditës</Text>
+                <Text style={s.tipText}>{stats.dailyTip}</Text>
+              </View>
+            </View>
+          ) : null}
+
+          {/* Parashikimi i faturës së ardhshme */}
+          {stats.forecast > 0 ? (
+            <TouchableOpacity style={s.forecastCard} onPress={() => navigation.navigate('Analytics')} activeOpacity={0.85}>
+              <View style={s.forecastIcon}><Ionicons name="trending-up" size={20} color={theme.primary} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.tipLabel}>Parashikimi i faturës së ardhshme</Text>
+                <Text style={s.forecastVal}>~{stats.forecast} €</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+            </TouchableOpacity>
+          ) : null}
+
           {/* Stats Grid */}
           <Text style={s.sectionTitle}>Të dhënat tuaja</Text>
           <View style={s.statsGrid}>
@@ -539,4 +586,13 @@ const styles = (theme) => StyleSheet.create({
   classRange: { color: theme.textSecondary, fontSize: 13 },
   classCloseBtn: { backgroundColor: theme.primary, borderRadius: 12, padding: 15, alignItems: 'center' },
   classCloseText: { color: '#fff', fontWeight: '800' },
+  // Këshilla e ditës
+  tipCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#F59E0B15', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#F59E0B40', marginBottom: 14 },
+  tipIcon: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#F59E0B22', alignItems: 'center', justifyContent: 'center' },
+  tipLabel: { color: theme.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 0.4, textTransform: 'uppercase' },
+  tipText: { color: theme.textPrimary, fontSize: 13, fontWeight: '600', marginTop: 3, lineHeight: 18 },
+  // Parashikimi i faturës
+  forecastCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.card, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: theme.border, marginBottom: 20 },
+  forecastIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' },
+  forecastVal: { color: theme.primary, fontSize: 20, fontWeight: '900', marginTop: 2 },
 });

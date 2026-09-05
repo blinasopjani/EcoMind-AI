@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
+import { supabase } from '../data/supabase';
 
 const { width } = Dimensions.get('window');
 
@@ -216,6 +217,7 @@ export default function GamificationScreen() {
   const [userId, setUserId] = useState(null);
   const [rewards, setRewards] = useState(REWARDS_CATALOG.slice(0, 4));
   const [rewardCursor, setRewardCursor] = useState(4);
+  const [extra, setExtra] = useState({ billCount: 0, deviceCount: 0, streak: 0 });
 
   // In-app modal state (zëvendëson Alert)
   const [modal, setModal] = useState({ visible: false, title: '', message: '', actions: null });
@@ -261,6 +263,20 @@ export default function GamificationScreen() {
       if (savedLevel) setLevel(parseInt(savedLevel));
       if (savedChallenges) setCompletedChallenges(JSON.parse(savedChallenges));
       if (savedInProgress) setInProgressChallenges(JSON.parse(savedInProgress));
+
+      // Të dhëna reale për distinktivë & streak (fatura/pajisje/buxhet)
+      try {
+        const [billsRes, devsRes] = await Promise.all([
+          supabase.from('bills').select('amount, created_at').eq('user_id', uid).order('created_at', { ascending: false }),
+          supabase.from('devices').select('id').eq('user_id', uid),
+        ]);
+        const bills = billsRes.data || [];
+        const houseStr = await AsyncStorage.getItem(`${uid}_house_data`);
+        const budget = houseStr ? (parseInt(String(JSON.parse(houseStr).buxheti || '').replace(/[^0-9]/g, '')) || 50) : 50;
+        let streak = 0;
+        for (const b of bills) { if ((b.amount || 0) <= budget) streak++; else break; }
+        setExtra({ billCount: bills.length, deviceCount: (devsRes.data || []).length, streak });
+      } catch (_) {}
     } catch (e) {
       console.error(e);
     } finally {
@@ -383,6 +399,18 @@ export default function GamificationScreen() {
   const weeklyChallenges = ALL_CHALLENGES.filter(c => c.id !== 'c_test');
   const testChallenge = ALL_CHALLENGES.find(c => c.id === 'c_test');
 
+  // Distinktivët - të fituara nga të dhënat reale
+  const badges = [
+    { key: 'first_bill', label: 'Fatura e parë', icon: 'receipt', got: extra.billCount >= 1 },
+    { key: 'collector', label: '3+ Fatura', icon: 'documents', got: extra.billCount >= 3 },
+    { key: 'devices', label: '3+ Pajisje', icon: 'hardware-chip', got: extra.deviceCount >= 3 },
+    { key: 'first_ch', label: 'Sfida e parë', icon: 'flag', got: completedChallenges.length >= 1 },
+    { key: 'five_ch', label: '5 Sfida', icon: 'ribbon', got: completedChallenges.length >= 5 },
+    { key: 'warrior', label: 'Eco Warrior', icon: 'shield-checkmark', got: points >= 1000 },
+    { key: 'master', label: 'Eco Master', icon: 'trophy', got: points >= 5000 },
+    { key: 'saver', label: 'Nën buxhet', icon: 'trending-down', got: extra.streak >= 1 },
+  ];
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       {/* In-App Modal (replaces all Alert/showAlert calls) */}
@@ -447,7 +475,24 @@ export default function GamificationScreen() {
         <View style={s.body}>
           {activeTab === 'sfidat' && (
             <>
-              <Text style={s.sectionTitle}>Sfidat Javore</Text>
+              {extra.streak > 0 && (
+                <View style={s.streakBanner}>
+                  <Ionicons name="flame" size={22} color="#F97316" />
+                  <Text style={s.streakText}>{extra.streak} {extra.streak === 1 ? 'faturë radhazi' : 'fatura radhazi'} nën buxhet!</Text>
+                </View>
+              )}
+
+              <Text style={s.sectionTitle}>Distinktivët e tua</Text>
+              <View style={s.badgeGrid}>
+                {badges.map(b => (
+                  <View key={b.key} style={[s.badgeItem, { opacity: b.got ? 1 : 0.5, borderColor: b.got ? theme.primary + '55' : theme.border }]}>
+                    <Ionicons name={b.got ? b.icon : 'lock-closed'} size={22} color={b.got ? theme.primary : theme.textMuted} />
+                    <Text style={[s.badgeLabel, { color: b.got ? theme.textPrimary : theme.textMuted }]} numberOfLines={2}>{b.label}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={[s.sectionTitle, { marginTop: 24 }]}>Sfidat Javore</Text>
               {weeklyChallenges.map(ch => (
                 <ChallengeCard
                   key={ch.id}
@@ -541,4 +586,9 @@ const styles = (theme) => StyleSheet.create({
   prizeCompany: { color: theme.textSecondary, fontSize: 12, marginTop: 2 },
   pointsBadge: { backgroundColor: theme.warning + '15', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   pointsText: { color: theme.warning, fontSize: 12, fontWeight: '800' },
+  streakBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F9731618', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#F9731640', marginBottom: 18 },
+  streakText: { color: theme.textPrimary, fontSize: 14, fontWeight: '800', flex: 1 },
+  badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
+  badgeItem: { width: '22%', minWidth: 74, aspectRatio: 1, borderRadius: 16, borderWidth: 1, backgroundColor: theme.card, alignItems: 'center', justifyContent: 'center', gap: 6, padding: 6 },
+  badgeLabel: { fontSize: 9, fontWeight: '700', textAlign: 'center' },
 });

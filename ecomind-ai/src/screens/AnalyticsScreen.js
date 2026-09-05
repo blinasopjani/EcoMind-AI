@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Dimensions, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Dimensions, ActivityIndicator, RefreshControl, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
@@ -7,7 +7,15 @@ import { supabase } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { showAlert } from '../data/alertHelper';
-import { deviceMonthlyKwh, KG_CO2_PER_KWH } from '../data/kescoTariff';
+import { deviceMonthlyKwh, KG_CO2_PER_KWH, computeKescoBill } from '../data/kescoTariff';
+
+// Këshillë e rigjeneruar pas editimit të faturës
+const editSuggestion = (calc) => {
+  if (calc.totalKwh > 800) return `Konsum i lartë (${calc.totalKwh} kWh): keni hyrë në bllokun e dytë tarifor (mbi 800 kWh). Ulja nën 800 kWh do të kursente ndjeshëm.`;
+  const dayRatio = calc.totalKwh > 0 ? calc.dayKwh / calc.totalKwh : 0;
+  if (dayRatio > 0.8) return 'Pjesa më e madhe e konsumit është gjatë ditës. Zhvendosni pajisjet e rënda pas orës 22:00 për tarifën e natës.';
+  return 'Konsumi juaj është brenda bllokut të parë tarifor. Vazhdoni kështu.';
+};
 
 const { width } = Dimensions.get('window');
 
@@ -28,6 +36,37 @@ const AnalyticsCard = ({ title, value, unit, change, icon, color, theme }) => (
   </View>
 );
 
+// Etiketë e shkurtër muaji nga data e faturës
+const shortMonth = (d) => {
+  const str = String(d || '');
+  const m = str.match(/(\d{1,2})[-/]\d{4}/);
+  if (m) return m[1].padStart(2, '0');
+  return str.slice(0, 3) || '-';
+};
+
+// Grafik i thjeshtë me shtylla (View, pa varësi) - i sigurt në web
+const BillsBarChart = ({ data, theme, unit = '€' }) => {
+  const s = styles(theme);
+  const max = Math.max(...data.map(d => d.value), 1);
+  return (
+    <View style={s.chartCard}>
+      <View style={s.chartRow}>
+        {data.map((d, i) => {
+          const h = Math.max(6, Math.round((d.value / max) * 118));
+          return (
+            <View key={i} style={s.chartCol}>
+              <Text style={s.chartVal} numberOfLines={1}>{d.value}</Text>
+              <LinearGradient colors={[theme.primary, theme.secondary]} style={[s.chartBar, { height: h }]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} />
+              <Text style={s.chartLbl} numberOfLines={1}>{d.label}</Text>
+            </View>
+          );
+        })}
+      </View>
+      <Text style={s.chartUnit}>Kostoja mujore ({unit})</Text>
+    </View>
+  );
+};
+
 export default function AnalyticsScreen() {
   const { theme, isDarkMode } = useTheme();
   const navigation = useNavigation();
@@ -35,6 +74,14 @@ export default function AnalyticsScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // --- Editimi i faturës ---
+  const [editBill, setEditBill] = useState(null); // {id, date, dpr}
+  const [editDay, setEditDay] = useState('');
+  const [editNight, setEditNight] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editDpr, setEditDpr] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
   const [stats, setStats] = useState({
     totalKwh: 0,
     totalEuro: 0,
@@ -97,7 +144,7 @@ export default function AnalyticsScreen() {
         changeKwh: changeK,
         changeEuro: changeE,
         hasBills: !!(bills && bills.length > 0),
-        history: (bills || []).slice(0, 6).map(b => ({ id: b.id, date: b.date || '-', kwh: b.kwh || 0, amount: b.amount || 0 })),
+        history: (bills || []).slice(0, 6).map(b => ({ id: b.id, date: b.date || '-', kwh: b.kwh || 0, amount: b.amount || 0, dpr: b.dpr || '' })),
       });
     } catch (error) {
       console.error(error);
@@ -131,6 +178,51 @@ export default function AnalyticsScreen() {
     );
   };
 
+  const openEdit = (h) => {
+    setEditBill({ id: h.id, date: h.date, dpr: h.dpr || '' });
+    // Parambush ditën me konsumin total (mund të ndahet nga përdoruesi ditë/natë)
+    setEditDay(String(h.kwh || ''));
+    setEditNight('');
+    setEditDate(h.date && h.date !== '-' ? h.date : '');
+    setEditDpr(h.dpr || '');
+  };
+
+  const saveEdit = async () => {
+    if (!editBill) return;
+    const d = parseFloat(editDay) || 0;
+    const n = parseFloat(editNight) || 0;
+    if (d + n <= 0) {
+      showAlert('Mungojnë të dhënat', 'Shkruani së paku konsumin e ditës ose të natës (kWh).');
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const uid = await AsyncStorage.getItem('user_id');
+      const bill = computeKescoBill(d, n);
+      const base = {
+        amount: bill.total,
+        kwh: bill.totalKwh,
+        date: editDate.trim() || editBill.date,
+        suggestion: editSuggestion(bill),
+      };
+      const payload = editDpr.trim() ? { ...base, dpr: editDpr.trim() } : base;
+      let { error } = await supabase.from('bills').update(payload).eq('id', editBill.id).eq('user_id', uid);
+      // Nëse kolona 'dpr' s'ekziston, ruaj pa të
+      if (error && /dpr|column/i.test(error.message || '')) {
+        ({ error } = await supabase.from('bills').update(base).eq('id', editBill.id).eq('user_id', uid));
+      }
+      if (error) throw error;
+      setEditBill(null);
+      fetchData(true);
+    } catch (e) {
+      showAlert('Gabim', 'Nuk u ruajt ndryshimi. Provoni përsëri.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const editCalc = computeKescoBill(parseFloat(editDay) || 0, parseFloat(editNight) || 0);
+
   useEffect(() => { fetchData(); }, []);
 
   // Rifresko sa herë hapet ekrani (që të mos tregojë të dhëna të vjetruara)
@@ -138,6 +230,12 @@ export default function AnalyticsScreen() {
     const unsubscribe = navigation.addListener('focus', () => fetchData(true));
     return unsubscribe;
   }, [navigation]);
+
+  // Të dhënat për grafik (kronologjike: e vjetra -> e reja)
+  const chartData = [...(stats.history || [])].reverse().map(h => ({
+    label: shortMonth(h.date),
+    value: Math.round(h.amount || 0),
+  }));
 
   return (
     <ScrollView style={s.container} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} tintColor={theme.primary} />}>
@@ -165,6 +263,13 @@ export default function AnalyticsScreen() {
           </View>
         ) : (
           <>
+            {chartData.length >= 2 && (
+              <View style={s.section}>
+                <Text style={s.sectionTitle}>Trendi i Faturave</Text>
+                <BillsBarChart data={chartData} theme={theme} />
+              </View>
+            )}
+
             <View style={s.section}>
               <Text style={s.sectionTitle}>Krahasimi i Faturave</Text>
               <AnalyticsCard title="Konsumi Total" value={stats.totalKwh} unit="kWh" change={stats.changeKwh} icon="flash" color={theme.primary} theme={theme} />
@@ -197,9 +302,14 @@ export default function AnalyticsScreen() {
                     <Text style={s.histKwh}>{h.kwh} kWh</Text>
                     <Text style={s.histAmount}>{h.amount} €</Text>
                     {h.id ? (
-                      <TouchableOpacity onPress={() => deleteBill(h.id)} style={{ paddingLeft: 12 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="Fshi faturën">
-                        <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                      </TouchableOpacity>
+                      <>
+                        <TouchableOpacity onPress={() => openEdit(h)} style={{ paddingLeft: 12 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="Edito faturën">
+                          <Ionicons name="create-outline" size={16} color={theme.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => deleteBill(h.id)} style={{ paddingLeft: 12 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="Fshi faturën">
+                          <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                        </TouchableOpacity>
+                      </>
                     ) : null}
                   </View>
                 ))}
@@ -209,6 +319,48 @@ export default function AnalyticsScreen() {
         )}
         <View style={{ height: 100 }} />
       </View>
+
+      {/* Modal i editimit të faturës */}
+      <Modal visible={!!editBill} transparent animationType="fade" onRequestClose={() => setEditBill(null)}>
+        <View style={s.editOverlay}>
+          <View style={s.editCard}>
+            <View style={s.editHeader}>
+              <Text style={s.editTitle}>Edito faturën</Text>
+              <TouchableOpacity onPress={() => setEditBill(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={s.editHint}>Rifut konsumin e ditës (A1) dhe natës (A2); shuma llogaritet me tarifat KESCO.</Text>
+
+            <Text style={s.editLabel}>Periudha</Text>
+            <TextInput style={s.editInput} value={editDate} onChangeText={setEditDate} placeholder="p.sh. Gusht 2026" placeholderTextColor={theme.textMuted} />
+
+            <Text style={s.editLabel}>Konsumi i ditës - A1 (kWh)</Text>
+            <TextInput style={s.editInput} value={editDay} onChangeText={setEditDay} keyboardType="numeric" placeholder="p.sh. 809" placeholderTextColor={theme.textMuted} />
+
+            <Text style={s.editLabel}>Konsumi i natës - A2 (kWh)</Text>
+            <TextInput style={s.editInput} value={editNight} onChangeText={setEditNight} keyboardType="numeric" placeholder="p.sh. 149" placeholderTextColor={theme.textMuted} />
+
+            <Text style={s.editLabel}>DPR (opsional)</Text>
+            <TextInput style={s.editInput} value={editDpr} onChangeText={setEditDpr} autoCapitalize="characters" placeholder="p.sh. DPR 90050095" placeholderTextColor={theme.textMuted} />
+
+            <View style={s.editPreview}>
+              <Text style={s.editPreviewLbl}>Fatura e re</Text>
+              <Text style={s.editPreviewVal}>{editCalc.total} €</Text>
+              <Text style={s.editPreviewSub}>{editCalc.totalKwh} kWh • Neto {editCalc.neto}€ + TVSH {editCalc.vat}€</Text>
+            </View>
+
+            <TouchableOpacity style={s.editSaveBtn} onPress={saveEdit} disabled={savingEdit}>
+              {savingEdit ? <ActivityIndicator color="#fff" /> : (
+                <>
+                  <Ionicons name="save-outline" size={18} color="#fff" />
+                  <Text style={s.editSaveText}>Ruaj ndryshimet</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -242,5 +394,25 @@ const styles = (theme) => StyleSheet.create({
   histRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
   histDate: { color: theme.textSecondary, fontSize: 13, flex: 1 },
   histKwh: { color: theme.textPrimary, fontSize: 13, fontWeight: '600', width: 90, textAlign: 'right' },
-  histAmount: { color: theme.primary, fontSize: 13, fontWeight: '800', width: 70, textAlign: 'right' }
+  histAmount: { color: theme.primary, fontSize: 13, fontWeight: '800', width: 70, textAlign: 'right' },
+  chartCard: { backgroundColor: theme.card, borderRadius: 24, padding: 18, borderWidth: 1, borderColor: theme.border },
+  chartRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', height: 168 },
+  chartCol: { flex: 1, alignItems: 'center' },
+  chartVal: { color: theme.textSecondary, fontSize: 10, fontWeight: '700', marginBottom: 4 },
+  chartBar: { width: 22, borderTopLeftRadius: 6, borderTopRightRadius: 6, minHeight: 6 },
+  chartLbl: { color: theme.textMuted, fontSize: 10, marginTop: 6 },
+  chartUnit: { color: theme.textMuted, fontSize: 10, textAlign: 'center', marginTop: 10, fontWeight: '600' },
+  editOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 },
+  editCard: { backgroundColor: theme.card, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: theme.border },
+  editHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  editTitle: { color: theme.textPrimary, fontSize: 18, fontWeight: '800' },
+  editHint: { color: theme.textSecondary, fontSize: 12, lineHeight: 17, marginBottom: 14 },
+  editLabel: { color: theme.textPrimary, fontSize: 13, fontWeight: '700', marginBottom: 6, marginTop: 4 },
+  editInput: { backgroundColor: theme.background, borderRadius: 12, padding: 12, color: theme.textPrimary, borderWidth: 1, borderColor: theme.border, marginBottom: 6 },
+  editPreview: { backgroundColor: theme.primary + '12', borderRadius: 16, padding: 14, alignItems: 'center', marginTop: 14, marginBottom: 16, borderWidth: 1, borderColor: theme.primary + '30' },
+  editPreviewLbl: { color: theme.textSecondary, fontSize: 11, fontWeight: '700' },
+  editPreviewVal: { color: theme.primary, fontSize: 28, fontWeight: '900', marginTop: 2 },
+  editPreviewSub: { color: theme.textSecondary, fontSize: 12, marginTop: 2 },
+  editSaveBtn: { backgroundColor: theme.primary, borderRadius: 14, padding: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  editSaveText: { color: '#fff', fontWeight: '700' },
 });

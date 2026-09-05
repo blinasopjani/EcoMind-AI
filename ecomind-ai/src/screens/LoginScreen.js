@@ -79,7 +79,7 @@ export default function LoginScreen({ navigation }) {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(target);
       if (error) { setErrorMsg(error.message || 'Nuk u dërgua dot email-i.'); return; }
-      setInfoMsg('Email-i i rivendosjes u dërgua. Kontrolloni inbox-in.');
+      setInfoMsg('Email-i i rivendosjes u dërgua. Kontrolloni emailin tuaj.');
     } catch (e) {
       setErrorMsg('Nuk u dërgua dot email-i i rivendosjes.');
     } finally {
