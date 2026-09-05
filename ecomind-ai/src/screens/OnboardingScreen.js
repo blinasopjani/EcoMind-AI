@@ -989,7 +989,7 @@ export default function OnboardingScreen({ navigation, route }) {
         )}
         {step < TOTAL_STEPS && (
           <TouchableOpacity style={s.skipBtn} onPress={handleSkipStep}>
-            <Text style={s.skipText}>Kapërce</Text>
+            <Text style={s.skipText}>Anashkalo</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -999,7 +999,7 @@ export default function OnboardingScreen({ navigation, route }) {
         >
           {loading ? <ActivityIndicator color="#fff" /> : (
             <>
-              <Text style={s.nextText}>{step === TOTAL_STEPS ? 'Fillo tani' : 'Vazhdo'}</Text>
+              <Text style={s.nextText}>{step === TOTAL_STEPS ? 'Përfundo' : 'Vazhdo'}</Text>
               <Ionicons name="arrow-forward" size={20} color="#fff" />
             </>
           )}

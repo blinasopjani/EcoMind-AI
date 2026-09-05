@@ -67,19 +67,19 @@ export default function LoginScreen({ navigation }) {
     setErrorMsg(''); setInfoMsg('');
     const target = toEmail(email);
     if (!email) {
-      setErrorMsg('Shkruani email-in tuaj për të rivendosur fjalëkalimin.');
+      setErrorMsg('Shkruani email-in tuaj.');
       return;
     }
     // Rivendosja kërkon email real — jo emër përdoruesi (që kthehet në @ecomind.app)
     if (!target.includes('@') || target.endsWith('@ecomind.app')) {
-      setErrorMsg('Rivendosja kërkon një email real. Nëse u regjistruat me emër përdoruesi, kontaktoni mbështetjen.');
+      setErrorMsg('Rivendosja kërkon një email real.');
       return;
     }
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(target);
       if (error) { setErrorMsg(error.message || 'Nuk u dërgua dot email-i.'); return; }
-      setInfoMsg('Të dërguam një email për rivendosjen e fjalëkalimit. Kontrolloni kutinë tuaj.');
+      setInfoMsg('Email-i i rivendosjes u dërgua. Kontrolloni inbox-in.');
     } catch (e) {
       setErrorMsg('Nuk u dërgua dot email-i i rivendosjes.');
     } finally {
