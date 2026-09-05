@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Modal, TextInput, ActivityIndicator, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, Modal, TextInput, ActivityIndicator, Platform, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
@@ -34,6 +34,40 @@ const TYPE_ICONS = {
   ngrohese: 'thermometer-outline', drite: 'bulb-outline', bulb: 'bulb-outline',
 };
 const typeIcon = (t) => TYPE_ICONS[String(t || '').toLowerCase()] || 'flash-outline';
+
+// Ekran "skanimi QR" - vetëm pamje (jo funksional): kornizë me kënde + vijë që lëviz.
+const QrScanMock = ({ theme, onClose }) => {
+  const s = styles(theme);
+  const scan = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scan, { toValue: 1, duration: 1500, useNativeDriver: true }),
+        Animated.timing(scan, { toValue: 0, duration: 1500, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  const translateY = scan.interpolate({ inputRange: [0, 1], outputRange: [6, 190] });
+  return (
+    <View style={s.qrBox}>
+      <TouchableOpacity style={s.searchClose} onPress={onClose}>
+        <Ionicons name="close" size={22} color={theme.textSecondary} />
+      </TouchableOpacity>
+      <View style={s.qrViewfinder}>
+        <View style={[s.qrCorner, s.qrTL]} />
+        <View style={[s.qrCorner, s.qrTR]} />
+        <View style={[s.qrCorner, s.qrBL]} />
+        <View style={[s.qrCorner, s.qrBR]} />
+        <Ionicons name="qr-code-outline" size={72} color="rgba(255,255,255,0.12)" />
+        <Animated.View style={[s.qrScanLine, { transform: [{ translateY }] }]} />
+      </View>
+      <Text style={s.searchTitle}>Po skanohet QR-i…</Text>
+      <Text style={s.searchSub}>Drejtoje kamerën nga kodi QR i pajisjes smart.</Text>
+    </View>
+  );
+};
 
 // Klasifikimi i efiçiencës sipas konsumit mujor (kWh) - për info-point
 const ENERGY_CLASSES = [
@@ -285,21 +319,21 @@ export default function DevicesScreen() {
 
         <View style={s.body}>
           <View style={s.consumptionCard}>
-            <LinearGradient colors={[theme.primary, theme.secondary]} style={s.consumptionGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+            <LinearGradient colors={[theme.primary, theme.secondary]} style={s.consumptionGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
               <View style={s.summaryRow}>
                 <View style={s.summaryItem}>
-                  <Text style={s.summaryVal}>{activeDevices.length}<Text style={s.summaryUnit}>/{devices.length}</Text></Text>
-                  <Text style={s.consLabel}>AKTIVE</Text>
+                  <Text style={s.summaryVal} numberOfLines={1} adjustsFontSizeToFit>{activeDevices.length}/{devices.length}</Text>
+                  <Text style={s.summaryLabel}>Aktive</Text>
                 </View>
                 <View style={s.summaryDivider} />
                 <View style={s.summaryItem}>
-                  <Text style={s.summaryVal}>{totalW}<Text style={s.summaryUnit}> W</Text></Text>
-                  <Text style={s.consLabel}>FUQIA</Text>
+                  <Text style={s.summaryVal} numberOfLines={1} adjustsFontSizeToFit>{totalW} W</Text>
+                  <Text style={s.summaryLabel}>Fuqia</Text>
                 </View>
                 <View style={s.summaryDivider} />
                 <View style={s.summaryItem}>
-                  <Text style={s.summaryVal}>~{activeMonthlyEur}<Text style={s.summaryUnit}> €</Text></Text>
-                  <Text style={s.consLabel}>VLERËSIM/MUAJ</Text>
+                  <Text style={s.summaryVal} numberOfLines={1} adjustsFontSizeToFit>~{activeMonthlyEur}€</Text>
+                  <Text style={s.summaryLabel}>Kosto/muaj</Text>
                 </View>
               </View>
             </LinearGradient>
@@ -354,16 +388,18 @@ export default function DevicesScreen() {
 
             {(!editingId && addMode === 'smart') ? (
               smartSearching ? (
+                smartMethod === 'qr' ? (
+                  <QrScanMock theme={theme} onClose={() => setSmartSearching(false)} />
+                ) : (
                 <View style={s.searchBox}>
                   <TouchableOpacity style={s.searchClose} onPress={() => setSmartSearching(false)}>
                     <Ionicons name="close" size={22} color={theme.textSecondary} />
                   </TouchableOpacity>
                   <ActivityIndicator size="large" color={theme.primary} />
                   <Text style={s.searchTitle}>Po kërkojmë pajisjen…</Text>
-                  <Text style={s.searchSub}>
-                    {smartMethod === 'qr' ? 'Duke skanuar QR-in e pajisjes.' : 'Duke u lidhur përmes internetit.'} Siguro që pajisja të jetë e ndezur dhe afër.
-                  </Text>
+                  <Text style={s.searchSub}>Duke u lidhur përmes internetit. Siguro që pajisja të jetë e ndezur dhe afër.</Text>
                 </View>
+                )
               ) : smartNotFound ? (
                 <View style={s.searchBox}>
                   <TouchableOpacity style={s.searchClose} onPress={() => setSmartNotFound(false)}>
@@ -392,19 +428,7 @@ export default function DevicesScreen() {
                     <Text style={s.smartMethodText}>Përmes internetit</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={s.smartDividerText}>ose zgjidh nga lista (konsum tipik)</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                  {DEVICE_CATALOG.map(p => {
-                    const sel = newName === p.name && String(newPower) === String(p.power);
-                    return (
-                      <TouchableOpacity key={p.type} style={[s.catalogItem, sel && s.catalogItemActive]} onPress={() => { setNewName(p.name); setNewPower(String(p.power)); setNewType(p.type); }}>
-                        <Ionicons name={typeIcon(p.type)} size={20} color={sel ? '#fff' : theme.primary} />
-                        <Text style={[s.catalogName, sel && { color: '#fff' }]} numberOfLines={1}>{p.name}</Text>
-                        <Text style={[s.catalogW, sel && { color: 'rgba(255,255,255,0.85)' }]}>{p.power}W</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+                <Text style={s.searchSub}>Zgjidh mënyrën e lidhjes më lart. Nëse pajisja nuk gjendet, mund ta shtosh manualisht te mënyra "Normale".</Text>
               </>
               )
             ) : (
@@ -472,7 +496,7 @@ const styles = (theme) => StyleSheet.create({
   headerSub: { color: theme.textSecondary, fontSize: 13, marginTop: 4 },
   body: { padding: 20 },
   consumptionCard: { borderRadius: 20, overflow: 'hidden', marginBottom: 20 },
-  consumptionGradient: { padding: 20, alignItems: 'center' },
+  consumptionGradient: { paddingVertical: 22, paddingHorizontal: 12 },
   consLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '700' },
   consValue: { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 5 },
   deviceCard: { backgroundColor: theme.card, borderRadius: 18, padding: 15, flexDirection: 'row', alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: theme.border },
@@ -506,6 +530,14 @@ const styles = (theme) => StyleSheet.create({
   searchClose: { position: 'absolute', top: 0, right: 0, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
   searchTitle: { color: theme.textPrimary, fontSize: 16, fontWeight: '800', marginTop: 16 },
   searchSub: { color: theme.textSecondary, fontSize: 12, textAlign: 'center', marginTop: 8, lineHeight: 18 },
+  qrBox: { alignItems: 'center', paddingVertical: 18 },
+  qrViewfinder: { width: 220, height: 220, borderRadius: 20, backgroundColor: '#0A0F1E', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginTop: 8, marginBottom: 16 },
+  qrCorner: { position: 'absolute', width: 34, height: 34, borderColor: theme.primary },
+  qrTL: { top: 14, left: 14, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 10 },
+  qrTR: { top: 14, right: 14, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 10 },
+  qrBL: { bottom: 14, left: 14, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 10 },
+  qrBR: { bottom: 14, right: 14, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 10 },
+  qrScanLine: { position: 'absolute', top: 0, left: 18, width: 184, height: 3, backgroundColor: theme.primary, borderRadius: 2 },
   presetItem: { width: '30%', paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.background, alignItems: 'center' },
   presetName: { color: theme.textPrimary, fontSize: 12, fontWeight: '700' },
   presetW: { color: theme.textSecondary, fontSize: 11, marginTop: 2 },
@@ -514,10 +546,10 @@ const styles = (theme) => StyleSheet.create({
   classBadgeText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   classRange: { color: theme.textSecondary, fontSize: 13 },
   // Përmbledhja lart
-  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  summaryItem: { flex: 1, alignItems: 'center' },
-  summaryVal: { color: '#fff', fontSize: 20, fontWeight: '900' },
-  summaryUnit: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.85)' },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', width: '100%' },
+  summaryItem: { flex: 1, alignItems: 'center', paddingHorizontal: 2 },
+  summaryVal: { color: '#fff', fontSize: 19, fontWeight: '900' },
+  summaryLabel: { color: 'rgba(255,255,255,0.9)', fontSize: 10, fontWeight: '700', marginTop: 6, letterSpacing: 0.3 },
   summaryDivider: { width: 1, height: 34, backgroundColor: 'rgba(255,255,255,0.25)' },
   // Karta e pajisjes: gjendja ON
   deviceCardOn: { borderColor: theme.primary },
