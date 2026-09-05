@@ -43,7 +43,7 @@ const AI_GOAL_TEMPLATES = [
   { key: 'kwh_20', label: () => `Arrij konsumin nën 200 kWh`, target: () => 200, unit: 'kWh', icon: 'analytics', color: '#0EA5E9' },
   { key: 'eur_budget', label: (kwh, amount) => `Kufizo faturën mujore në 30€`, target: () => 30, unit: '€', icon: 'wallet', color: '#F59E0B' },
   { key: 'eur_15', label: (kwh, amount) => `Kurseje 15% të faturës`, target: (kwh, amount) => Math.round(amount * 0.85), unit: '€', icon: 'cash', color: '#10B981' },
-  { key: 'kwh_night', label: () => `Objektiv: Natë e ulët — 150 kWh`, target: () => 150, unit: 'kWh', icon: 'moon', color: '#6366F1' },
+  { key: 'kwh_night', label: () => `Objektiv: Natë e ulët - 150 kWh`, target: () => 150, unit: 'kWh', icon: 'moon', color: '#6366F1' },
   { key: 'co2_reduction', label: () => `CO₂: nën 100 kg CO₂ ekuivalent`, target: () => 100, unit: 'kg CO₂', icon: 'leaf', color: '#22C55E' },
 ];
 

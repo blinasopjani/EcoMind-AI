@@ -115,7 +115,7 @@ const ChallengeCard = ({ id, title, sub, desc, points, time, durationMs, icon, c
         <Text style={styles(theme).challengeMetaText}>+{points} Pikë</Text>
       </View>
       {isInProgress && !isCompleted && (
-        <Text style={{ color: color, fontSize: 10, fontWeight: '700', marginTop: 3 }}>NË PROGRES — kthehu dhe shtyp "Mërr pikët"</Text>
+        <Text style={{ color: color, fontSize: 10, fontWeight: '700', marginTop: 3 }}>NË PROGRES - kthehu dhe shtyp "Mërr pikët"</Text>
       )}
     </View>
     {isCompleted ? (
@@ -170,7 +170,7 @@ const ALL_CHALLENGES = [
   },
   {
     id: 'c5', title: 'Dushi i Shpejtë', sub: 'Bëni dush nën 5 minuta.',
-    desc: 'Uji i ngrohtë konsumon shumë energji. Provoni të mbyllni dushin brenda 5 minutash — kurseni rreth 20 litra ujë dhe energji për ngrohje.',
+    desc: 'Uji i ngrohtë konsumon shumë energji. Provoni të mbyllni dushin brenda 5 minutash - kurseni rreth 20 litra ujë dhe energji për ngrohje.',
     points: 80, time: '5 min', durationMs: 300000, icon: 'water', color: '#0EA5E9',
   },
   {
@@ -324,7 +324,7 @@ export default function GamificationScreen() {
 
   const getTimeLeft = (deadline) => {
     const ms = new Date(deadline).getTime() - now;
-    if (ms <= 0) return 'Gati — mërr pikët!';
+    if (ms <= 0) return 'Gati - mërr pikët!';
     const h = Math.floor(ms / 3600000);
     const m = Math.floor((ms % 3600000) / 60000);
     const sec = Math.floor((ms % 60000) / 1000);

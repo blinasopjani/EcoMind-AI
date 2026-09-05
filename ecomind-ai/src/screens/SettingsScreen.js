@@ -69,7 +69,7 @@ export default function SettingsScreen({ navigation }) {
         if (authData?.user?.email) authEmail = authData.user.email;
       } catch (_) {}
 
-      // 3. Merr të dhënat e shtëpisë — VETËM me prefiksin e këtij përdoruesi
+      // 3. Merr të dhënat e shtëpisë - VETËM me prefiksin e këtij përdoruesi
       // (pa fallback global, që një llogari e re të mos trashëgojë të dhënat e tjetrit)
       const houseData = await AsyncStorage.getItem(`${uid}_house_data`);
       const parsedHouse = houseData ? JSON.parse(houseData) : null;
@@ -78,7 +78,7 @@ export default function SettingsScreen({ navigation }) {
       const { data: devicesData } = await supabase.from('devices').select('id').eq('user_id', uid);
       const { data: billsData } = await supabase.from('bills').select('amount, kwh, created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(1);
 
-      // 5. Shpërblimet e fituara — PËR KËTË USER (jo globale)
+      // 5. Shpërblimet e fituara - PËR KËTË USER (jo globale)
       const redeemed = JSON.parse((await AsyncStorage.getItem(`${uid}_redeemed_rewards`)) || '[]');
       setRedeemedRewards(redeemed);
 
@@ -98,7 +98,7 @@ export default function SettingsScreen({ navigation }) {
       setUserData({
         emri: user?.full_name || localName,
         email: authEmail || user?.email || '',
-        banimi: parsedHouse?.banimi || (parsedHouse?.llojiBanese ? `${parsedHouse.llojiBanese} — ${parsedHouse.m2 ? `${parsedHouse.m2}m²` : ''}` : 'Apartament — 85m²'),
+        banimi: parsedHouse?.banimi || (parsedHouse?.llojiBanese ? `${parsedHouse.llojiBanese} - ${parsedHouse.m2 ? `${parsedHouse.m2}m²` : ''}` : 'Apartament - 85m²'),
         personat: parsedHouse?.personat || '4 persona',
         buxheti,
       });
@@ -115,7 +115,7 @@ export default function SettingsScreen({ navigation }) {
         await supabase.from('users').update({ full_name: formData.emri }).eq('id', uid);
         await AsyncStorage.setItem('user_name', formData.emri);
       } else {
-        // Ruajmë të dhënat e shtëpisë me user_id prefix — BASHKOJMË me ekzistueset
+        // Ruajmë të dhënat e shtëpisë me user_id prefix - BASHKOJMË me ekzistueset
         // që të mos humbin fushat e tjera të onboarding-ut (ngrohja, ftohja, izolimi,
         // m2, llojiBanese, objektivi...) që AI-ja dhe ekranet e tjera i përdorin.
         const uid = await AsyncStorage.getItem('user_id');
@@ -155,7 +155,7 @@ export default function SettingsScreen({ navigation }) {
   };
 
   const logout = async () => {
-    // Only clear session tokens — preserve user-keyed data (gamification, goals, house)
+    // Only clear session tokens - preserve user-keyed data (gamification, goals, house)
     await AsyncStorage.removeItem('user_id');
     await AsyncStorage.removeItem('user_name');
     await supabase.auth.signOut();
@@ -205,7 +205,7 @@ export default function SettingsScreen({ navigation }) {
               const uid = await AsyncStorage.getItem('user_id');
               // Provo fshirjen e plotë server-side (përfshin llogarinë Auth) nëse
               // Edge Function 'delete-account' është deploy-uar. Nëse jo, vazhdojmë
-              // me fshirjen nga klienti (të dhënat) — funksionon gjithsesi.
+              // me fshirjen nga klienti (të dhënat) - funksionon gjithsesi.
               try { await supabase.functions.invoke('delete-account'); } catch (_) {}
               if (uid) {
                 await supabase.from('bills').delete().eq('user_id', uid);
@@ -272,7 +272,7 @@ export default function SettingsScreen({ navigation }) {
             </View>
             <View style={s.statCard}>
               <Ionicons name="wallet-outline" size={22} color="#F59E0B" />
-              <Text style={s.statNum}>{stats.lastBill ? `${stats.lastBill.amount}€` : '—'}</Text>
+              <Text style={s.statNum}>{stats.lastBill ? `${stats.lastBill.amount}€` : '-'}</Text>
               <Text style={s.statLblSm}>Fatura e fundit</Text>
             </View>
             <View style={s.statCard}>
@@ -356,7 +356,7 @@ export default function SettingsScreen({ navigation }) {
             <Text style={s.sectionTitle}>Të dhënat</Text>
             <View style={s.card}>
               <SettingRow icon="download-outline" label="Eksporto faturat" sub="Shkarko faturat e tua si CSV" onPress={exportBills} color={theme.info} theme={theme} />
-              <SettingRow icon="trash-outline" label="Fshi të dhënat e llogarisë" sub="Fatura, pajisje dhe profili — përgjithmonë" onPress={deleteAccountData} color="#EF4444" theme={theme} />
+              <SettingRow icon="trash-outline" label="Fshi të dhënat e llogarisë" sub="Fatura, pajisje dhe profili - përgjithmonë" onPress={deleteAccountData} color="#EF4444" theme={theme} />
             </View>
           </View>
 

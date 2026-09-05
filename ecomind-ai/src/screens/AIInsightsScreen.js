@@ -42,7 +42,7 @@ export default function AIInsightsScreen() {
       const uid = await AsyncStorage.getItem('user_id');
       const { data: bills } = await supabase.from('bills').select('*').eq('user_id', uid).order('created_at', { ascending: false });
       const { data: devices } = await supabase.from('devices').select('*').eq('user_id', uid);
-      // Vetëm çelësat e këtij përdoruesi (pa fallback global — që një user të mos shohë të dhënat e tjetrit)
+      // Vetëm çelësat e këtij përdoruesi (pa fallback global - që një user të mos shohë të dhënat e tjetrit)
       const houseStr = uid ? await AsyncStorage.getItem(`${uid}_house_data`) : null;
       const localDevsStr = uid ? await AsyncStorage.getItem(`${uid}_user_devices`) : null;
       const lastBillStr = uid ? await AsyncStorage.getItem(`${uid}_last_bill`) : null;
@@ -163,14 +163,14 @@ export default function AIInsightsScreen() {
         let t = `Fatura e fundit: ${last.amount || 0}€ për ${last.kwh || 0} kWh.`;
         if (bills.length > 1 && bills[1].amount) {
           const diff = Math.round(((last.amount - bills[1].amount) / bills[1].amount) * 100);
-          t += diff > 0 ? ` Kjo është ${diff}% më shumë se e mëparshmja.` : ` Kjo është ${Math.abs(diff)}% më pak se e mëparshmja — bravo!`;
+          t += diff > 0 ? ` Kjo është ${diff}% më shumë se e mëparshmja.` : ` Kjo është ${Math.abs(diff)}% më pak se e mëparshmja - bravo!`;
         }
         return t;
       }
       return 'S\'kam ende një faturë për të treguar. Shtoni faturën tuaj të parë.';
     }
     if (q.includes('kurs') || q.includes('reduk') || q.includes('ul ') || q.includes('si t')) {
-      if (topDevice && topDevice.w > 0) return `Pajisja juaj më harxhuese është "${topDevice.name}" (${topDevice.w} W). Shmangeni në orët e pikut 18:00–22:00 — mund të kurseni 10–15%.`;
+      if (topDevice && topDevice.w > 0) return `Pajisja juaj më harxhuese është "${topDevice.name}" (${topDevice.w} W). Shmangeni në orët e pikut 18:00-22:00 - mund të kurseni 10-15%.`;
       return 'Shtoni pajisjet tuaja që t\'ju them saktësisht cila harxhon më shumë dhe si të kurseni.';
     }
     if (q.includes('pajisje') || q.includes('device')) {
@@ -178,7 +178,7 @@ export default function AIInsightsScreen() {
       return `Keni ${devices.length} pajisje të regjistruara.` + (topDevice && topDevice.w > 0 ? ` Më harxhuesja: "${topDevice.name}" (${topDevice.w} W).` : '');
     }
     if (q.includes('përsh') || q.includes('tung') || q.includes('hello') || q.includes('hi')) {
-      return 'Përshëndetje! Pyetni për konsumin, faturën, pajisjet ose si të kurseni — përgjigjem nga të dhënat tuaja reale.';
+      return 'Përshëndetje! Pyetni për konsumin, faturën, pajisjet ose si të kurseni - përgjigjem nga të dhënat tuaja reale.';
     }
     if (last || devices.length > 0) {
       return `Ja çka di për ju: ${last ? `fatura e fundit ${last.amount || 0}€ / ${last.kwh || 0} kWh` : 'ende pa faturë'}, ${devices.length} pajisje. Provoni: "si të kursej?" ose "sa harxhoj?".`;

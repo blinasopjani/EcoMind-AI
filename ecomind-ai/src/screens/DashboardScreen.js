@@ -32,14 +32,14 @@ const getEnergyClass = (kwh) => {
   return { cls: 'D', color: '#DC2626' };
 };
 
-// Klasifikimi i efiçiencës sipas konsumit mujor (kWh) — për info-point te Dashboard
+// Klasifikimi i efiçiencës sipas konsumit mujor (kWh) - për info-point te Dashboard
 const ENERGY_CLASSES = [
   { cls: 'A+++', range: '≤ 100 kWh', color: '#10B981' },
-  { cls: 'A++', range: '101–150 kWh', color: '#22C55E' },
-  { cls: 'A+', range: '151–200 kWh', color: '#84CC16' },
-  { cls: 'A', range: '201–300 kWh', color: '#EAB308' },
-  { cls: 'B', range: '301–400 kWh', color: '#F97316' },
-  { cls: 'C', range: '401–500 kWh', color: '#EF4444' },
+  { cls: 'A++', range: '101-150 kWh', color: '#22C55E' },
+  { cls: 'A+', range: '151-200 kWh', color: '#84CC16' },
+  { cls: 'A', range: '201-300 kWh', color: '#EAB308' },
+  { cls: 'B', range: '301-400 kWh', color: '#F97316' },
+  { cls: 'C', range: '401-500 kWh', color: '#EF4444' },
   { cls: 'D', range: '> 500 kWh', color: '#DC2626' },
 ];
 
@@ -85,7 +85,7 @@ export default function DashboardScreen({ navigation }) {
         return;
       }
 
-      // Marrim TË GJITHA të dhënat njëkohësisht (paralelisht) — jo një nga një.
+      // Marrim TË GJITHA të dhënat njëkohësisht (paralelisht) - jo një nga një.
       // Kjo e shpejton ndjeshëm hapjen e Dashboard-it pas kyçjes: dy pyetjet
       // Supabase (bills + devices) dhe leximet lokale kryhen në të njëjtën kohë,
       // në vend që të presin radhazi (çka e bënte ndjesinë "kyçja është e ngadaltë").
@@ -165,7 +165,7 @@ export default function DashboardScreen({ navigation }) {
       const co2Saved = Math.max(0, parseFloat(((avgKwh - lastKwh) * KG_CO2_PER_KWH).toFixed(1)));
       const euroSaved = Math.max(0, parseFloat(((avgKwh - lastKwh) * KWH_TO_EUR).toFixed(2)));
 
-      // 7. Active AI goal (newest from user goals) — vetëm per-user
+      // 7. Active AI goal (newest from user goals) - vetëm per-user
       const goalsRaw = goalsUid;
       const allGoals = goalsRaw ? JSON.parse(goalsRaw) : [];
       const activeGoal = allGoals.length > 0 ? allGoals[allGoals.length - 1] : null;
@@ -180,7 +180,7 @@ export default function DashboardScreen({ navigation }) {
       const budgetWarning = lastAmount > budgetEuro;
 
       // A ka dhënë përdoruesi ndonjë të dhënë reale? (faturë ose pajisje)
-      // Nëse jo, nuk shfaqet asnjë analizë/parashikim/impakt — vetëm ftesa për të filluar.
+      // Nëse jo, nuk shfaqet asnjë analizë/parashikim/impakt - vetëm ftesa për të filluar.
       const hasData = (bills && bills.length > 0) || devices.length > 0;
 
       setStats({
@@ -286,7 +286,7 @@ export default function DashboardScreen({ navigation }) {
               <Text style={s.progressLabelText}>Buxheti: {stats.targetKwh} kWh ({stats.targetEuro}€)</Text>
               <Text style={[s.progressLabelText, budgetPct >= 90 && { color: '#EF4444', fontWeight: '800' }]}>{Math.round(budgetPct)}%</Text>
             </View>
-            {stats.estimated && <Text style={s.estNote}>Vlerësim nga pajisjet — shto faturë për shifra të sakta.</Text>}
+            {stats.estimated && <Text style={s.estNote}>Vlerësim nga pajisjet - shto faturë për shifra të sakta.</Text>}
           </Animated.View>
           ) : (
           <Animated.View style={[s.mainCard, { opacity: fadeAnim }]}>
@@ -396,7 +396,7 @@ export default function DashboardScreen({ navigation }) {
               <View style={{ flex: 1 }}>
                 <Text style={s.insightLabel}>Konsumatori Kryesor</Text>
                 <Text style={s.insightValue} numberOfLines={1}>
-                  {stats.topDevice ? `${stats.topDevice.name} — ${stats.topDevice.avg_consumption || '?'} W` : 'Nuk keni pajisje të regjistruara'}
+                  {stats.topDevice ? `${stats.topDevice.name} - ${stats.topDevice.avg_consumption || '?'} W` : 'Nuk keni pajisje të regjistruara'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />

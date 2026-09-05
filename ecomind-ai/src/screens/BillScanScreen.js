@@ -173,7 +173,7 @@ export default function BillScanScreen() {
                 </View>
                 {savedResult.breakdown.map(r => (
                   <View key={r.key} style={s.resRow}>
-                    <Text style={s.resLabel}>{r.label} — {r.kwh} kWh × {r.price}€</Text>
+                    <Text style={s.resLabel}>{r.label} - {r.kwh} kWh × {r.price}€</Text>
                     <Text style={s.resValue}>{r.amount} €</Text>
                   </View>
                 ))}
@@ -186,7 +186,7 @@ export default function BillScanScreen() {
               </View>
             ) : (
               <View style={s.card}>
-                <Text style={s.formHint}>Vlerat i gjeni te fatura KESCO: "Gjendja e tanishme − paraprake" për ditën (A1) dhe natën (A2), ose thjesht konsumi total.</Text>
+                <Text style={s.formHint}>Vlerat i gjeni te fatura KESCO: "Gjendja e tanishme - paraprake" për ditën (A1) dhe natën (A2), ose thjesht konsumi total.</Text>
 
                 <Text style={s.label}>DPR (Shifra e konsumatorit)</Text>
                 <TextInput style={s.input} placeholder="p.sh. DPR 90050095" placeholderTextColor={theme.textMuted} value={dpr} onChangeText={setDpr} autoCapitalize="characters" />
@@ -224,10 +224,10 @@ export default function BillScanScreen() {
                   </TouchableOpacity>
                 </Modal>
 
-                <Text style={s.label}>Konsumi i ditës — A1 (kWh)</Text>
+                <Text style={s.label}>Konsumi i ditës - A1 (kWh)</Text>
                 <TextInput style={s.input} placeholder="p.sh. 809" placeholderTextColor={theme.textMuted} value={dayKwh} onChangeText={setDayKwh} keyboardType="numeric" />
 
-                <Text style={s.label}>Konsumi i natës — A2 (kWh)</Text>
+                <Text style={s.label}>Konsumi i natës - A2 (kWh)</Text>
                 <TextInput style={s.input} placeholder="p.sh. 149" placeholderTextColor={theme.textMuted} value={nightKwh} onChangeText={setNightKwh} keyboardType="numeric" />
 
                 {/* Parashikimi live i faturës */}

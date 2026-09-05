@@ -53,7 +53,7 @@ export default function NotificationsScreen({ navigation }) {
         setLoading(false);
         return;
       }
-      // Të dhënat reale: faturat dhe pajisjet — të filtruara për userin aktual (jo vetëm RLS)
+      // Të dhënat reale: faturat dhe pajisjet - të filtruara për userin aktual (jo vetëm RLS)
       const { data: bills } = await supabase.from('bills').select('*').eq('user_id', uid).order('created_at', { ascending: false });
       const { data: devices } = await supabase.from('devices').select('*').eq('user_id', uid);
 
@@ -140,7 +140,7 @@ export default function NotificationsScreen({ navigation }) {
           list.push({
             key: 'top-device',
             title: 'Pajisja më harxhuese',
-            body: `"${top.name}" ka fuqinë më të lartë (${top.w} W). Shmangni përdorimin në orët e pikut (18:00–22:00).`,
+            body: `"${top.name}" ka fuqinë më të lartë (${top.w} W). Shmangni përdorimin në orët e pikut (18:00-22:00).`,
             icon: 'flash-outline',
             color: theme.danger,
             isNew: false,

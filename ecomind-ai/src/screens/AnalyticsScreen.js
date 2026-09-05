@@ -97,7 +97,7 @@ export default function AnalyticsScreen() {
         changeKwh: changeK,
         changeEuro: changeE,
         hasBills: !!(bills && bills.length > 0),
-        history: (bills || []).slice(0, 6).map(b => ({ id: b.id, date: b.date || '—', kwh: b.kwh || 0, amount: b.amount || 0 })),
+        history: (bills || []).slice(0, 6).map(b => ({ id: b.id, date: b.date || '-', kwh: b.kwh || 0, amount: b.amount || 0 })),
       });
     } catch (error) {
       console.error(error);

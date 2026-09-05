@@ -38,7 +38,7 @@ export default function SimulatorScreen() {
         setHasBills(true);
         setCurrentBill(bills[0].amount);
       } else {
-        // Pa fatura reale — s'shpikim vlerë; tregojmë gjendje bosh
+        // Pa fatura reale - s'shpikim vlerë; tregojmë gjendje bosh
         setHasBills(false);
         setCurrentBill(0);
       }
@@ -178,7 +178,7 @@ export default function SimulatorScreen() {
             <View style={{ flex: 1 }}>
               <Text style={s.forecastTitle}>Parashikimi AI</Text>
               <Text style={s.forecastMsg}>
-                Duke u bazuar në shpenzimet tuaja, nëse reduktoni {reduction}% — do të kurseni{' '}
+                Duke u bazuar në shpenzimet tuaja, nëse reduktoni {reduction}% - do të kurseni{' '}
                 <Text style={{ color: theme.primary, fontWeight: '800' }}>{yearlyProjection}€</Text> brenda një viti.
               </Text>
             </View>

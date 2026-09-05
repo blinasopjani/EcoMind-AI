@@ -143,7 +143,7 @@ export default function OnboardingScreen({ navigation, route }) {
   const [objektivi, setObjektivi] = useState('');
   const [synimiKursimit, setSynimiKursimit] = useState('');
 
-  // Bill scan state (step 5 — manual bill)
+  // Bill scan state (step 5 - manual bill)
   const [billDayKwh, setBillDayKwh] = useState('');
   const [billNightKwh, setBillNightKwh] = useState('');
   const [billMonth, setBillMonth] = useState('');
@@ -249,15 +249,15 @@ export default function OnboardingScreen({ navigation, route }) {
       const houseData = {
         llojiBanese: llojiBanese || 'Apartament',
         m2: houseSize || '85',
-        banimi: llojiBanese ? `${llojiBanese} — ${houseSize ? `${houseSize}m²` : ''}` : houseSize ? `${houseSize}m²` : 'Apartament — 85m²',
+        banimi: llojiBanese ? `${llojiBanese} - ${houseSize ? `${houseSize}m²` : ''}` : houseSize ? `${houseSize}m²` : 'Apartament - 85m²',
         dhoma: dhoma || '3',
         izolimi: izolimi || 'Mesatar',
-        vitiNdertimit: vitiNdertimit || '1990–2010',
+        vitiNdertimit: vitiNdertimit || '1990-2010',
         personat: familyMembers ? `${familyMembers} persona` : '4 persona',
         femijeMoshuar: femijeMoshuar || 'Jo',
         orari: orari || 'Gjithë ditën',
         ngrohja: ngrohja || 'Rrymë',
-        muajNgrohje: muajNgrohje || '5–6',
+        muajNgrohje: muajNgrohje || '5-6',
         ftohja: ftohja || 'Klimë inverter',
         ujiNgrohte: ujiNgrohte || 'Bojler elektrik',
         klasaPajisjeve: klasaPajisjeve || 'A++',
@@ -443,7 +443,7 @@ export default function OnboardingScreen({ navigation, route }) {
         <Text style={s.label}>Viti i ndërtimit</Text>
         <ChipSelect
           theme={theme}
-          options={['Para 1990', '1990–2010', 'Pas 2010']}
+          options={['Para 1990', '1990-2010', 'Pas 2010']}
           value={vitiNdertimit}
           onChange={setVitiNdertimit}
         />
@@ -504,7 +504,7 @@ export default function OnboardingScreen({ navigation, route }) {
         <Ionicons name="flame" size={28} color={theme.primary} />
         <View style={{ flex: 1 }}>
           <Text style={s.stepTitle}>Ngrohja, ftohja dhe uji</Text>
-          <Text style={s.stepSub}>Konsumatorët kryesorë të energjisë — të dhënat për parashikime sezionale.</Text>
+          <Text style={s.stepSub}>Konsumatorët kryesorë të energjisë - të dhënat për parashikime sezionale.</Text>
         </View>
       </View>
 
@@ -522,7 +522,7 @@ export default function OnboardingScreen({ navigation, route }) {
         <Text style={s.label}>Sa muaj në vit përdor ngrohjen?</Text>
         <ChipSelect
           theme={theme}
-          options={['1–2', '3–4', '5–6', 'Mbi 6']}
+          options={['1-2', '3-4', '5-6', 'Mbi 6']}
           value={muajNgrohje}
           onChange={setMuajNgrohje}
         />
@@ -598,7 +598,7 @@ export default function OnboardingScreen({ navigation, route }) {
           {customDevices.map((d, idx) => (
             <View key={idx} style={s.deviceRow}>
               <Ionicons name="flash" size={18} color={theme.primary} />
-              <Text style={s.deviceRowText}>{d.name} — {d.power}W</Text>
+              <Text style={s.deviceRowText}>{d.name} - {d.power}W</Text>
               <TouchableOpacity onPress={() => removeCustomDevice(idx)}>
                 <Ionicons name="close-circle" size={22} color="#EF4444" />
               </TouchableOpacity>
@@ -689,7 +689,7 @@ export default function OnboardingScreen({ navigation, route }) {
       </View>
 
       <View style={s.fieldSection}>
-        <Text style={s.label}>DPR — Shifra e konsumatorit (opsionale)</Text>
+        <Text style={s.label}>DPR - Shifra e konsumatorit (opsionale)</Text>
         <View style={s.inputWrapper}>
           <Ionicons name="barcode-outline" size={20} color={theme.textMuted} style={s.inputIcon} />
           <TextInput
@@ -793,7 +793,7 @@ export default function OnboardingScreen({ navigation, route }) {
           }]}>
             <Ionicons name="checkmark-circle" size={28} color={theme.success || '#10B981'} />
             <Text style={[s.billSavedText, { color: theme.textPrimary }]}>
-              Fatura u ruajt! ({billCalc.total} € — {billCalc.totalKwh} kWh)
+              Fatura u ruajt! ({billCalc.total} € - {billCalc.totalKwh} kWh)
             </Text>
           </View>
         ) : billSkipped ? (
@@ -804,7 +804,7 @@ export default function OnboardingScreen({ navigation, route }) {
             <Ionicons name="information-circle-outline" size={26} color={theme.primary} />
             <View style={{ flex: 1 }}>
               <Text style={[s.billSavedText, { color: theme.textPrimary, fontSize: 13 }]}>
-                Fatura u anashkalua — mund ta skanoni ose futni kur të dëshironi te ekrani "Fatura".
+                Fatura u anashkalua - mund ta skanoni ose futni kur të dëshironi te ekrani "Fatura".
               </Text>
               <TouchableOpacity onPress={() => setBillSkipped(false)} style={{ marginTop: 6 }}>
                 <Text style={{ fontSize: 12, fontWeight: '700', color: theme.primary }}>+ Shto faturën tani</Text>
@@ -870,7 +870,7 @@ export default function OnboardingScreen({ navigation, route }) {
             </Modal>
 
             <View style={s.fieldSection}>
-              <Text style={s.label}>Konsumi i ditës — A1 (kWh)</Text>
+              <Text style={s.label}>Konsumi i ditës - A1 (kWh)</Text>
               <View style={s.inputWrapper}>
                 <Ionicons name="sunny-outline" size={18} color={theme.textMuted} style={s.inputIcon} />
                 <TextInput
@@ -885,7 +885,7 @@ export default function OnboardingScreen({ navigation, route }) {
             </View>
 
             <View style={s.fieldSection}>
-              <Text style={s.label}>Konsumi i natës — A2 (kWh)</Text>
+              <Text style={s.label}>Konsumi i natës - A2 (kWh)</Text>
               <View style={s.inputWrapper}>
                 <Ionicons name="moon-outline" size={18} color={theme.textMuted} style={s.inputIcon} />
                 <TextInput
@@ -904,7 +904,7 @@ export default function OnboardingScreen({ navigation, route }) {
                 <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '700' }}>Fatura e llogaritur</Text>
                 <Text style={{ color: theme.primary, fontSize: 28, fontWeight: '900', marginTop: 4 }}>{billCalc.total} €</Text>
                 <Text style={{ color: theme.textSecondary, fontSize: 12, marginTop: 2 }}>
-                  {billCalc.totalKwh} kWh — Neto {billCalc.neto}€ + TVSH {billCalc.vat}€
+                  {billCalc.totalKwh} kWh - Neto {billCalc.neto}€ + TVSH {billCalc.vat}€
                 </Text>
               </View>
             )}
@@ -968,7 +968,7 @@ export default function OnboardingScreen({ navigation, route }) {
         </View>
         <Text style={s.headerTitle}>
           Hapi {step} nga {TOTAL_STEPS}
-          {userName ? ` — Mirë se vjen, ${userName.split(' ')[0]}!` : ''}
+          {userName ? ` - Mirë se vjen, ${userName.split(' ')[0]}!` : ''}
         </Text>
       </LinearGradient>
 

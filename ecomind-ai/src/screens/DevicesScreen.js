@@ -7,54 +7,79 @@ import { supabase } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { showAlert } from '../data/alertHelper';
+import { deviceMonthlyKwh, KWH_TO_EUR } from '../data/kescoTariff';
 
 
-// Pajisje "smart" të gatshme me konsum tipik (W) — për shtim me një prekje
-const SMART_PRESETS = [
-  { name: 'Klimë', power: 1200, type: 'ac' },
-  { name: 'Bojler', power: 2000, type: 'bulb' },
-  { name: 'Frigorifer', power: 150, type: 'bulb' },
+// Katalog pajisjesh specifike me konsum tipik (W) - për shtim profesional me një prekje
+const DEVICE_CATALOG = [
+  { name: 'Frigorifer', power: 150, type: 'frigorifer' },
+  { name: 'Ngrirëse', power: 200, type: 'ngrirese' },
+  { name: 'Lavatriçe', power: 2000, type: 'lavatrice' },
+  { name: 'Enëlarëse', power: 1800, type: 'enelarese' },
+  { name: 'Klimë', power: 1200, type: 'klime' },
+  { name: 'Bojler', power: 2000, type: 'bojler' },
+  { name: 'Furrë elektrike', power: 2500, type: 'furre' },
+  { name: 'Mikrovalë', power: 1000, type: 'mikrovale' },
   { name: 'Televizor', power: 120, type: 'tv' },
-  { name: 'Lavatriçe', power: 2000, type: 'bulb' },
-  { name: 'Mikrovalë', power: 1000, type: 'bulb' },
+  { name: 'Kompjuter', power: 200, type: 'kompjuter' },
+  { name: 'Ngrohëse', power: 2000, type: 'ngrohese' },
+  { name: 'Ndriçim', power: 60, type: 'drite' },
 ];
 
-// Klasifikimi i efiçiencës sipas konsumit mujor (kWh) — për info-point
+// Ikona specifike sipas llojit të pajisjes
+const TYPE_ICONS = {
+  frigorifer: 'snow-outline', ngrirese: 'cube-outline', lavatrice: 'shirt-outline',
+  enelarese: 'restaurant-outline', klime: 'snow', ac: 'snow', bojler: 'water-outline',
+  furre: 'flame-outline', mikrovale: 'radio-outline', tv: 'tv-outline', kompjuter: 'desktop-outline',
+  ngrohese: 'thermometer-outline', drite: 'bulb-outline', bulb: 'bulb-outline',
+};
+const typeIcon = (t) => TYPE_ICONS[String(t || '').toLowerCase()] || 'flash-outline';
+
+// Klasifikimi i efiçiencës sipas konsumit mujor (kWh) - për info-point
 const ENERGY_CLASSES = [
   { cls: 'A+++', range: '≤ 100 kWh', color: '#10B981' },
-  { cls: 'A++', range: '101–150 kWh', color: '#22C55E' },
-  { cls: 'A+', range: '151–200 kWh', color: '#84CC16' },
-  { cls: 'A', range: '201–300 kWh', color: '#EAB308' },
-  { cls: 'B', range: '301–400 kWh', color: '#F97316' },
-  { cls: 'C', range: '401–500 kWh', color: '#EF4444' },
+  { cls: 'A++', range: '101-150 kWh', color: '#22C55E' },
+  { cls: 'A+', range: '151-200 kWh', color: '#84CC16' },
+  { cls: 'A', range: '201-300 kWh', color: '#EAB308' },
+  { cls: 'B', range: '301-400 kWh', color: '#F97316' },
+  { cls: 'C', range: '401-500 kWh', color: '#EF4444' },
   { cls: 'D', range: '> 500 kWh', color: '#DC2626' },
 ];
 
-const DeviceItem = ({ id, name, type, power, status, onToggle, onEdit, onDelete, theme }) => (
-  <View style={styles(theme).deviceCard}>
-    <View style={styles(theme).deviceIconContainer}>
-      <Ionicons name={type === 'ac' ? 'snow' : type === 'tv' ? 'tv' : 'bulb'} size={24} color={theme.primary} />
+const DeviceItem = ({ id, name, type, power, status, onToggle, onEdit, onDelete, theme }) => {
+  const s = styles(theme);
+  const kwh = deviceMonthlyKwh({ avg_consumption: power, type });
+  const eur = (kwh * KWH_TO_EUR).toFixed(2);
+  return (
+    <View style={[s.deviceCard, status && s.deviceCardOn]}>
+      <View style={[s.deviceIconContainer, status && { backgroundColor: theme.primary + '22' }]}>
+        <Ionicons name={typeIcon(type)} size={22} color={status ? theme.primary : theme.textMuted} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={s.deviceName} numberOfLines={1}>{name}</Text>
+        <Text style={s.deviceSub}>{power} W · ~{kwh} kWh/muaj · ~{eur}€</Text>
+      </View>
+      <View style={s.deviceActions}>
+        <TouchableOpacity onPress={() => onEdit({ id, name, power, type })} style={s.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="pencil" size={15} color={theme.textSecondary} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => onDelete(id)} style={s.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="trash" size={15} color="#FF4D4D" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => onToggle(id, !status)}
+          activeOpacity={0.8}
+          style={[s.statusPill, { backgroundColor: status ? theme.primary : theme.background, borderColor: status ? theme.primary : theme.border }]}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: status }}
+        >
+          <Ionicons name={status ? 'power' : 'power-outline'} size={13} color={status ? '#fff' : theme.textMuted} />
+          <Text style={[s.statusPillText, { color: status ? '#fff' : theme.textMuted }]}>{status ? 'Ndezur' : 'Fikur'}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
-    <View style={{ flex: 1 }}>
-      <Text style={styles(theme).deviceName}>{name}</Text>
-      <Text style={styles(theme).deviceSub}>{power} W • {status ? 'Ndezur' : 'Fikur'}</Text>
-    </View>
-    <View style={styles(theme).deviceActions}>
-      <TouchableOpacity onPress={() => onEdit({ id, name, power, type })} style={styles(theme).actionBtn}>
-        <Ionicons name="pencil" size={16} color={theme.textSecondary} />
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => onDelete(id)} style={styles(theme).actionBtn}>
-        <Ionicons name="trash" size={16} color="#FF4D4D" />
-      </TouchableOpacity>
-      <Switch
-        value={status}
-        onValueChange={() => onToggle(id, !status)}
-        trackColor={{ false: theme.border, true: theme.primary + '60' }}
-        thumbColor={status ? theme.primary : theme.textMuted}
-      />
-    </View>
-  </View>
-);
+  );
+};
 
 export default function DevicesScreen() {
   const { theme, isDarkMode } = useTheme();
@@ -240,6 +265,8 @@ export default function DevicesScreen() {
 
   const activeDevices = devices.filter(d => d.status);
   const totalW = activeDevices.reduce((sum, d) => sum + d.power, 0);
+  const activeMonthlyKwh = activeDevices.reduce((sum, d) => sum + deviceMonthlyKwh({ avg_consumption: d.power, type: d.type }), 0);
+  const activeMonthlyEur = (activeMonthlyKwh * KWH_TO_EUR).toFixed(2);
 
   return (
     <View style={s.container}>
@@ -258,9 +285,23 @@ export default function DevicesScreen() {
 
         <View style={s.body}>
           <View style={s.consumptionCard}>
-            <LinearGradient colors={[theme.primary, theme.secondary]} style={s.consumptionGradient}>
-              <Text style={s.consLabel}>AKTIVE: {activeDevices.length}</Text>
-              <Text style={s.consValue}>{totalW} W</Text>
+            <LinearGradient colors={[theme.primary, theme.secondary]} style={s.consumptionGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+              <View style={s.summaryRow}>
+                <View style={s.summaryItem}>
+                  <Text style={s.summaryVal}>{activeDevices.length}<Text style={s.summaryUnit}>/{devices.length}</Text></Text>
+                  <Text style={s.consLabel}>AKTIVE</Text>
+                </View>
+                <View style={s.summaryDivider} />
+                <View style={s.summaryItem}>
+                  <Text style={s.summaryVal}>{totalW}<Text style={s.summaryUnit}> W</Text></Text>
+                  <Text style={s.consLabel}>FUQIA</Text>
+                </View>
+                <View style={s.summaryDivider} />
+                <View style={s.summaryItem}>
+                  <Text style={s.summaryVal}>~{activeMonthlyEur}<Text style={s.summaryUnit}> €</Text></Text>
+                  <Text style={s.consLabel}>VLERËSIM/MUAJ</Text>
+                </View>
+              </View>
             </LinearGradient>
           </View>
 
@@ -352,44 +393,46 @@ export default function DevicesScreen() {
                   </TouchableOpacity>
                 </View>
                 <Text style={s.smartDividerText}>ose zgjidh nga lista (konsum tipik)</Text>
-                <View style={s.presetGrid}>
-                  {SMART_PRESETS.map(p => {
-                    const sel = newName === p.name && newPower === String(p.power);
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+                  {DEVICE_CATALOG.map(p => {
+                    const sel = newName === p.name && String(newPower) === String(p.power);
                     return (
-                      <TouchableOpacity key={p.name} style={[s.presetItem, sel && s.typeOptionActive]} onPress={() => { setNewName(p.name); setNewPower(String(p.power)); setNewType(p.type); }}>
-                        <Text style={[s.presetName, sel && { color: '#fff' }]}>{p.name}</Text>
-                        <Text style={[s.presetW, sel && { color: '#fff' }]}>{p.power} W</Text>
+                      <TouchableOpacity key={p.type} style={[s.catalogItem, sel && s.catalogItemActive]} onPress={() => { setNewName(p.name); setNewPower(String(p.power)); setNewType(p.type); }}>
+                        <Ionicons name={typeIcon(p.type)} size={20} color={sel ? '#fff' : theme.primary} />
+                        <Text style={[s.catalogName, sel && { color: '#fff' }]} numberOfLines={1}>{p.name}</Text>
+                        <Text style={[s.catalogW, sel && { color: 'rgba(255,255,255,0.85)' }]}>{p.power}W</Text>
                       </TouchableOpacity>
                     );
                   })}
-                </View>
+                </ScrollView>
               </>
               )
             ) : (
               <>
+                {!editingId && (
+                  <>
+                    <Text style={s.label}>Zgjidh pajisjen</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+                      {DEVICE_CATALOG.map(p => {
+                        const sel = newName === p.name && String(newPower) === String(p.power);
+                        return (
+                          <TouchableOpacity key={p.type} style={[s.catalogItem, sel && s.catalogItemActive]} onPress={() => { setNewName(p.name); setNewPower(String(p.power)); setNewType(p.type); }}>
+                            <Ionicons name={typeIcon(p.type)} size={20} color={sel ? '#fff' : theme.primary} />
+                            <Text style={[s.catalogName, sel && { color: '#fff' }]} numberOfLines={1}>{p.name}</Text>
+                            <Text style={[s.catalogW, sel && { color: 'rgba(255,255,255,0.85)' }]}>{p.power}W</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                    <Text style={s.smartDividerText}>ose fut/rregullo manualisht</Text>
+                  </>
+                )}
+
                 <Text style={s.label}>Emri i Pajisjes</Text>
                 <TextInput style={s.input} value={newName} onChangeText={setNewName} placeholder="p.sh. Bojleri, Klima" placeholderTextColor={theme.textMuted} />
 
                 <Text style={s.label}>Fuqia (Watt)</Text>
                 <TextInput style={s.input} value={newPower} onChangeText={setNewPower} placeholder="p.sh. 2000" placeholderTextColor={theme.textMuted} keyboardType="numeric" />
-
-                <Text style={s.label}>Lloji i Pajisjes</Text>
-                <View style={s.typeSelector}>
-                  {[
-                    { key: 'bulb', label: 'Dritë', icon: 'bulb-outline' },
-                    { key: 'ac', label: 'Klimë', icon: 'snow' },
-                    { key: 'tv', label: 'TV', icon: 'tv-outline' }
-                  ].map(item => (
-                    <TouchableOpacity
-                      key={item.key}
-                      style={[s.typeOption, newType === item.key && s.typeOptionActive]}
-                      onPress={() => setNewType(item.key)}
-                    >
-                      <Ionicons name={item.icon} size={16} color={newType === item.key ? '#fff' : theme.textPrimary} />
-                      <Text style={[s.typeOptionText, newType === item.key && s.typeOptionTextActive]}>{item.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
               </>
             )}
 
@@ -470,4 +513,20 @@ const styles = (theme) => StyleSheet.create({
   classBadge: { width: 46, paddingVertical: 4, borderRadius: 8, alignItems: 'center' },
   classBadgeText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   classRange: { color: theme.textSecondary, fontSize: 13 },
+  // Përmbledhja lart
+  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  summaryVal: { color: '#fff', fontSize: 20, fontWeight: '900' },
+  summaryUnit: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.85)' },
+  summaryDivider: { width: 1, height: 34, backgroundColor: 'rgba(255,255,255,0.25)' },
+  // Karta e pajisjes: gjendja ON
+  deviceCardOn: { borderColor: theme.primary },
+  // Kontrolli i qartë Ndezur/Fikur
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, height: 32, borderRadius: 16, borderWidth: 1 },
+  statusPillText: { fontSize: 12, fontWeight: '800' },
+  // Katalogu i pajisjeve
+  catalogItem: { width: 92, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 14, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.background, alignItems: 'center', gap: 4 },
+  catalogItemActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  catalogName: { color: theme.textPrimary, fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  catalogW: { color: theme.textSecondary, fontSize: 10 },
 });

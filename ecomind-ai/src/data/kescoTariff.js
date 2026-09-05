@@ -24,7 +24,11 @@ export const KG_CO2_PER_KWH = 0.4;    // kg CO2 për kWh (rrjeti i Kosovës, i p
 export const AVG_HOUSEHOLD_KWH = 500; // konsumi mesatar mujor i një amvisërie (Kosovë)
 
 // Orët e paracaktuara ditore sipas llojit të pajisjes (për vlerësim energjie)
-const DEFAULT_HOURS = { ac: 6, tv: 4, bojler: 3, frigorifer: 24, bulb: 5 };
+const DEFAULT_HOURS = {
+  frigorifer: 24, ngrirese: 24, lavatrice: 1, enelarese: 1,
+  klime: 6, ac: 6, bojler: 3, furre: 1, mikrovale: 0.5,
+  tv: 4, kompjuter: 5, ngrohese: 4, drite: 5, bulb: 5,
+};
 
 // Vlerëson konsumin mujor (kWh) të NJË pajisjeje — fuqia (W) × orë/ditë × 30.
 // Kështu renditja "më harxhuese" bëhet sipas energjisë, jo vetëm Watt-eve.
