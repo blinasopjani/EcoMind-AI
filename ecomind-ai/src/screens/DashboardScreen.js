@@ -453,10 +453,10 @@ export default function DashboardScreen({ navigation }) {
           {/* Efficiency Impact Card */}
           <Text style={[s.sectionTitle, { marginTop: 24 }]}>Impakti i Llogarisë</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Analytics')} activeOpacity={0.85}>
-            <LinearGradient colors={['#1E293B', '#0F172A']} style={s.impactCard}>
+            <LinearGradient colors={[theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.impactCard}>
               <View style={s.impactRow}>
                 <View style={s.impactItem}>
-                  <Text style={[s.impactClass, { color: energyColor }]}>{energyClass}</Text>
+                  <Text style={s.impactClass}>{energyClass}</Text>
                   <Text style={s.impactItemLabel}>Klasa e Energjisë</Text>
                 </View>
                 <View style={s.impactDivider} />
@@ -473,7 +473,7 @@ export default function DashboardScreen({ navigation }) {
                 </View>
               </View>
               <Text style={s.impactDesc}>Krahasuar me mesataren kosovare ~500 kWh/muaj</Text>
-              <Ionicons name="earth" size={80} color="rgba(255,255,255,0.05)" style={s.earthIcon} />
+              <Ionicons name="earth" size={80} color="rgba(255,255,255,0.12)" style={s.earthIcon} />
             </LinearGradient>
           </TouchableOpacity>
           </>
@@ -563,12 +563,12 @@ const styles = (theme) => StyleSheet.create({
   impactCard: { borderRadius: 28, padding: 25, position: 'relative', overflow: 'hidden', marginBottom: 8 },
   impactRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   impactItem: { flex: 1, alignItems: 'center' },
-  impactClass: { fontSize: 26, fontWeight: '900' },
+  impactClass: { fontSize: 26, fontWeight: '900', color: '#fff' },
   impactStat: { fontSize: 22, fontWeight: '900', color: '#fff' },
-  impactStatUnit: { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: -2 },
-  impactItemLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '700', textAlign: 'center', marginTop: 4 },
-  impactDivider: { width: 1, height: 50, backgroundColor: 'rgba(255,255,255,0.1)' },
-  impactDesc: { color: 'rgba(255,255,255,0.5)', fontSize: 10, textAlign: 'center', marginTop: 4 },
+  impactStatUnit: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: -2, fontWeight: '700' },
+  impactItemLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '700', textAlign: 'center', marginTop: 4 },
+  impactDivider: { width: 1, height: 44, backgroundColor: 'rgba(255,255,255,0.25)' },
+  impactDesc: { color: 'rgba(255,255,255,0.8)', fontSize: 11, textAlign: 'center', marginTop: 6, fontWeight: '500' },
   earthIcon: { position: 'absolute', right: -20, bottom: -20 },
   // Empty state (kur s'ka të dhëna)
   emptyStateCard: { backgroundColor: theme.card, borderRadius: 24, borderWidth: 1, borderColor: theme.border, padding: 28, alignItems: 'center', marginTop: 4 },
