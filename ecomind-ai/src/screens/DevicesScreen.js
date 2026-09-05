@@ -35,10 +35,14 @@ const TYPE_ICONS = {
 };
 const typeIcon = (t) => TYPE_ICONS[String(t || '').toLowerCase()] || 'flash-outline';
 
-// Ekran "skanimi QR" - vetëm pamje (jo funksional): kornizë me kënde + vijë që lëviz.
+// Ekran skanimi QR: në web hap KAMERËN reale (feed live) me kornizë skaneri sipër.
+// Nuk e lexon vërtet QR-in (vetëm pamje). Nëse kamera refuzohet, tregon kornizën e errët.
 const QrScanMock = ({ theme, onClose }) => {
   const s = styles(theme);
   const scan = useRef(new Animated.Value(0)).current;
+  const camRef = useRef(null);
+  const [camDenied, setCamDenied] = useState(false);
+
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -49,22 +53,57 @@ const QrScanMock = ({ theme, onClose }) => {
     loop.start();
     return () => loop.stop();
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.mediaDevices || typeof document === 'undefined') {
+      return;
+    }
+    let stream = null;
+    let videoEl = null;
+    let cancelled = false;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        videoEl = document.createElement('video');
+        videoEl.setAttribute('autoplay', '');
+        videoEl.setAttribute('playsinline', '');
+        videoEl.muted = true;
+        Object.assign(videoEl.style, { position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', objectFit: 'cover', borderRadius: '20px' });
+        videoEl.srcObject = stream;
+        try { await videoEl.play(); } catch (_) {}
+        const node = camRef.current;
+        if (node && node.appendChild) node.insertBefore(videoEl, node.firstChild);
+        else setCamDenied(true);
+      } catch (e) {
+        setCamDenied(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      if (videoEl && videoEl.remove) videoEl.remove();
+    };
+  }, []);
+
   const translateY = scan.interpolate({ inputRange: [0, 1], outputRange: [6, 190] });
   return (
     <View style={s.qrBox}>
       <TouchableOpacity style={s.searchClose} onPress={onClose}>
         <Ionicons name="close" size={22} color={theme.textSecondary} />
       </TouchableOpacity>
-      <View style={s.qrViewfinder}>
+      <View ref={camRef} style={s.qrViewfinder}>
         <View style={[s.qrCorner, s.qrTL]} />
         <View style={[s.qrCorner, s.qrTR]} />
         <View style={[s.qrCorner, s.qrBL]} />
         <View style={[s.qrCorner, s.qrBR]} />
-        <Ionicons name="qr-code-outline" size={72} color="rgba(255,255,255,0.12)" />
+        {camDenied && <Ionicons name="qr-code-outline" size={72} color="rgba(255,255,255,0.12)" />}
         <Animated.View style={[s.qrScanLine, { transform: [{ translateY }] }]} />
       </View>
       <Text style={s.searchTitle}>Po skanohet QR-i…</Text>
-      <Text style={s.searchSub}>Drejtoje kamerën nga kodi QR i pajisjes smart.</Text>
+      <Text style={s.searchSub}>
+        {camDenied ? 'Kamera nuk u lejua. Mund të shtosh pajisjen manualisht te "Normale".' : 'Drejtoje kamerën nga kodi QR i pajisjes smart.'}
+      </Text>
     </View>
   );
 };
@@ -157,10 +196,10 @@ export default function DevicesScreen() {
   // Simulimi i lidhjes smart: pas disa sekondash përfundon me "nuk u gjet"
   // (që të mos duket sikur app-i ngeci). Nuk lidh pajisje reale.
   useEffect(() => {
-    if (!smartSearching) return;
+    if (!smartSearching || smartMethod === 'qr') return; // QR-i mban kamerën hapur derisa ta mbyllë useri
     const t = setTimeout(() => { setSmartSearching(false); setSmartNotFound(true); }, 5000);
     return () => clearTimeout(t);
-  }, [smartSearching]);
+  }, [smartSearching, smartMethod]);
 
   const fetchDevices = async (uid) => {
     setLoading(true);
