@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
-import { computeKescoBill, estimateMonthlyKwhFromDevices } from '../data/kescoTariff';
+import { computeKescoBill, estimateMonthlyKwhFromDevices, deviceMonthlyKwh, KWH_TO_EUR, KG_CO2_PER_KWH, AVG_HOUSEHOLD_KWH } from '../data/kescoTariff';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
@@ -141,7 +141,7 @@ export default function DashboardScreen({ navigation }) {
       const houseDataStr = houseUid;
       const houseData = houseDataStr ? JSON.parse(houseDataStr) : null;
       const budgetEuro = houseData ? parseInt(houseData.buxheti.replace(/[^0-9]/g, '')) : 50;
-      const targetKwh = Math.round(budgetEuro / 0.07) || 400;
+      const targetKwh = Math.round(budgetEuro / KWH_TO_EUR) || 400;
 
       // 4. Consumption
       let lastKwh = 0, lastAmount = 0, estimated = false;
@@ -157,13 +157,13 @@ export default function DashboardScreen({ navigation }) {
       // 5. Top consumer device (by avg_consumption, only ON devices preferred)
       const onDevices = devices.filter(d => d.isOn);
       const sortedDevices = [...(onDevices.length > 0 ? onDevices : devices)]
-        .sort((a, b) => (b.avg_consumption || 0) - (a.avg_consumption || 0));
+        .sort((a, b) => deviceMonthlyKwh(b) - deviceMonthlyKwh(a));
       const topDevice = sortedDevices[0] || null;
 
       // 6. CO2 & Euro saved vs average household (avg Kosovo ~500 kWh/month)
-      const avgKwh = 500;
-      const co2Saved = Math.max(0, parseFloat(((avgKwh - lastKwh) * 0.4).toFixed(1)));
-      const euroSaved = Math.max(0, parseFloat(((avgKwh - lastKwh) * 0.07).toFixed(2)));
+      const avgKwh = AVG_HOUSEHOLD_KWH;
+      const co2Saved = Math.max(0, parseFloat(((avgKwh - lastKwh) * KG_CO2_PER_KWH).toFixed(1)));
+      const euroSaved = Math.max(0, parseFloat(((avgKwh - lastKwh) * KWH_TO_EUR).toFixed(2)));
 
       // 7. Active AI goal (newest from user goals) — vetëm per-user
       const goalsRaw = goalsUid;
@@ -249,9 +249,14 @@ export default function DashboardScreen({ navigation }) {
               <Text style={s.heroGreeting}>Mirë se vini{userName ? `, ${userName}` : ''}</Text>
               <Text style={s.heroBrand}>EcoMind AI+</Text>
             </View>
-            <TouchableOpacity style={s.profileBtn} onPress={() => navigation.navigate('More', { screen: 'Settings' })}>
-              <Ionicons name="settings-outline" size={28} color="#fff" />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity style={s.profileBtn} onPress={() => navigation.navigate('Notifications')} accessibilityRole="button" accessibilityLabel="Njoftimet">
+                <Ionicons name="notifications-outline" size={26} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity style={s.profileBtn} onPress={() => navigation.navigate('More', { screen: 'Settings' })} accessibilityRole="button" accessibilityLabel="Cilësimet">
+                <Ionicons name="settings-outline" size={28} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {stats.hasData ? (
@@ -443,7 +448,7 @@ export default function DashboardScreen({ navigation }) {
             </View>
           )}
 
-          <Text style={{ textAlign: 'center', color: theme.textMuted, fontSize: 10, marginBottom: 20, marginTop: 8 }}>EcoMind AI+ v2.3</Text>
+          <Text style={{ textAlign: 'center', color: theme.textMuted, fontSize: 10, marginBottom: 20, marginTop: 8 }}>EcoMind AI+ v1.0.0</Text>
           <View style={{ height: 120 }} />
         </View>
       </ScrollView>

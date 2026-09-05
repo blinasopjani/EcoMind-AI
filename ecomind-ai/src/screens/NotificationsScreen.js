@@ -45,9 +45,17 @@ export default function NotificationsScreen({ navigation }) {
     const list = [];
     try {
       const uid = await AsyncStorage.getItem('user_id'); // për çelësat lokalë per-user
-      // Të dhënat reale: faturat dhe pajisjet (RLS i kufizon te përdoruesi aktual)
-      const { data: bills } = await supabase.from('bills').select('*').order('created_at', { ascending: false });
-      const { data: devices } = await supabase.from('devices').select('*');
+
+      // Respekto preferencën e njoftimeve (Cilësimet)
+      const notifEnabled = uid ? (await AsyncStorage.getItem(`${uid}_notifications_enabled`)) !== '0' : true;
+      if (!notifEnabled) {
+        setItems([{ key: 'disabled', title: 'Njoftimet janë çaktivizuar', body: 'Aktivizoji te Cilësimet për të parë njoftimet mbi faturat, pajisjet dhe pikët.', icon: 'notifications-off-outline', color: theme.textMuted, isNew: false }]);
+        setLoading(false);
+        return;
+      }
+      // Të dhënat reale: faturat dhe pajisjet — të filtruara për userin aktual (jo vetëm RLS)
+      const { data: bills } = await supabase.from('bills').select('*').eq('user_id', uid).order('created_at', { ascending: false });
+      const { data: devices } = await supabase.from('devices').select('*').eq('user_id', uid);
 
       const b = bills || [];
       const d = devices || [];
@@ -191,6 +199,12 @@ export default function NotificationsScreen({ navigation }) {
   useEffect(() => {
     buildNotifications();
   }, []);
+
+  // Rifresko njoftimet sa herë hapet ekrani (të dhëna të freskëta pas shtimit të faturës)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => buildNotifications());
+    return unsubscribe;
+  }, [navigation]);
 
   const newOnes = items.filter(i => i.isNew);
   const older = items.filter(i => !i.isNew);

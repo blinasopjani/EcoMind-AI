@@ -17,6 +17,24 @@ export const KESCO = {
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
+// Faktorë referencë të CENTRALIZUAR (përdoren nga disa ekrane — që numrat të
+// përputhen kudo, jo secili ekran me vlerën e vet).
+export const KWH_TO_EUR = 0.08;       // €/kWh mesatar efektiv (bllok + tarifë fikse + TVSH)
+export const KG_CO2_PER_KWH = 0.4;    // kg CO2 për kWh (rrjeti i Kosovës, i përafërt)
+export const AVG_HOUSEHOLD_KWH = 500; // konsumi mesatar mujor i një amvisërie (Kosovë)
+
+// Orët e paracaktuara ditore sipas llojit të pajisjes (për vlerësim energjie)
+const DEFAULT_HOURS = { ac: 6, tv: 4, bojler: 3, frigorifer: 24, bulb: 5 };
+
+// Vlerëson konsumin mujor (kWh) të NJË pajisjeje — fuqia (W) × orë/ditë × 30.
+// Kështu renditja "më harxhuese" bëhet sipas energjisë, jo vetëm Watt-eve.
+export const deviceMonthlyKwh = (device = {}) => {
+  const watts = Number(device.avg_consumption || device.power || 0);
+  const type = String(device.baseType || device.type || '').toLowerCase().replace(/_(on|off)$/, '');
+  const hours = Number(device.hours_per_day) || DEFAULT_HOURS[type] || 4;
+  return round2((watts * hours * 30) / 1000);
+};
+
 // Llogarit faturën nga konsumi i ditës dhe natës (kWh).
 // Kthen një objekt të plotë me ndarjet, netën, TVSH-në dhe totalin.
 export const computeKescoBill = (dayKwhInput, nightKwhInput) => {
@@ -74,13 +92,5 @@ export const computeKescoBill = (dayKwhInput, nightKwhInput) => {
 // Vlerëson konsumin mujor (kWh) nga një listë pajisjesh me fuqi (W) dhe orë/ditë.
 // Nëse ora/ditë mungon, përdoret një vlerë e paracaktuar sipas llojit.
 export const estimateMonthlyKwhFromDevices = (devices = []) => {
-  const defaultHours = { ac: 6, tv: 4, bojler: 3, frigorifer: 24, bulb: 5 };
-  let dailyWh = 0;
-  for (const d of devices) {
-    const watts = Number(d.avg_consumption || d.power || 0);
-    const type = (d.type || '').toLowerCase();
-    const hours = Number(d.hours_per_day) || defaultHours[type] || 4;
-    dailyWh += watts * hours;
-  }
-  return round2((dailyWh * 30) / 1000); // Wh/ditë -> kWh/muaj
+  return round2((devices || []).reduce((sum, d) => sum + deviceMonthlyKwh(d), 0));
 };

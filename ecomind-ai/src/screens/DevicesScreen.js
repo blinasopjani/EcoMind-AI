@@ -71,6 +71,7 @@ export default function DevicesScreen() {
   const [addMode, setAddMode] = useState('manual'); // 'manual' | 'smart'
   const [smartSearching, setSmartSearching] = useState(false); // simulim i lidhjes smart
   const [smartMethod, setSmartMethod] = useState(null); // 'qr' | 'net'
+  const [smartNotFound, setSmartNotFound] = useState(false);
   const [showClassInfo, setShowClassInfo] = useState(false);
   const [userId, setUserId] = useState(null);
 
@@ -93,6 +94,14 @@ export default function DevicesScreen() {
     });
     return unsubscribe;
   }, [navigation]);
+
+  // Simulimi i lidhjes smart: pas disa sekondash përfundon me "nuk u gjet"
+  // (që të mos duket sikur app-i ngeci). Nuk lidh pajisje reale.
+  useEffect(() => {
+    if (!smartSearching) return;
+    const t = setTimeout(() => { setSmartSearching(false); setSmartNotFound(true); }, 5000);
+    return () => clearTimeout(t);
+  }, [smartSearching]);
 
   const fetchDevices = async (uid) => {
     setLoading(true);
@@ -270,7 +279,7 @@ export default function DevicesScreen() {
                   theme={theme} 
                 />
               ))}
-              <TouchableOpacity style={s.addBtn} onPress={() => { setEditingId(null); setNewName(''); setNewPower(''); setNewType('bulb'); setAddMode('manual'); setSmartSearching(false); setModalVisible(true); }}>
+              <TouchableOpacity style={s.addBtn} onPress={() => { setEditingId(null); setNewName(''); setNewPower(''); setNewType('bulb'); setAddMode('manual'); setSmartSearching(false); setSmartNotFound(false); setModalVisible(true); }}>
                 <Ionicons name="add-circle" size={24} color="#fff" />
                 <Text style={s.addBtnText}>Shto Pajisje</Text>
               </TouchableOpacity>
@@ -290,11 +299,11 @@ export default function DevicesScreen() {
               <>
                 <Text style={s.label}>Mënyra e lidhjes</Text>
                 <View style={s.typeSelector}>
-                  <TouchableOpacity style={[s.typeOption, addMode === 'manual' && s.typeOptionActive]} onPress={() => { setAddMode('manual'); setSmartSearching(false); }}>
+                  <TouchableOpacity style={[s.typeOption, addMode === 'manual' && s.typeOptionActive]} onPress={() => { setAddMode('manual'); setSmartSearching(false); setSmartNotFound(false); }}>
                     <Ionicons name="create-outline" size={16} color={addMode === 'manual' ? '#fff' : theme.textPrimary} />
                     <Text style={[s.typeOptionText, addMode === 'manual' && s.typeOptionTextActive]}>Normale</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[s.typeOption, addMode === 'smart' && s.typeOptionActive]} onPress={() => { setAddMode('smart'); setSmartSearching(false); }}>
+                  <TouchableOpacity style={[s.typeOption, addMode === 'smart' && s.typeOptionActive]} onPress={() => { setAddMode('smart'); setSmartSearching(false); setSmartNotFound(false); }}>
                     <Ionicons name="hardware-chip-outline" size={16} color={addMode === 'smart' ? '#fff' : theme.textPrimary} />
                     <Text style={[s.typeOptionText, addMode === 'smart' && s.typeOptionTextActive]}>Smart</Text>
                   </TouchableOpacity>
@@ -314,15 +323,30 @@ export default function DevicesScreen() {
                     {smartMethod === 'qr' ? 'Duke skanuar QR-in e pajisjes.' : 'Duke u lidhur përmes internetit.'} Siguro që pajisja të jetë e ndezur dhe afër.
                   </Text>
                 </View>
+              ) : smartNotFound ? (
+                <View style={s.searchBox}>
+                  <TouchableOpacity style={s.searchClose} onPress={() => setSmartNotFound(false)}>
+                    <Ionicons name="close" size={22} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                  <Ionicons name="cloud-offline-outline" size={40} color={theme.textMuted} />
+                  <Text style={s.searchTitle}>Nuk u gjet asnjë pajisje</Text>
+                  <Text style={s.searchSub}>Sigurohu që pajisja të jetë e ndezur dhe afër, ose shtoje manualisht.</Text>
+                  <TouchableOpacity style={[s.saveBtn, { marginTop: 16, alignSelf: 'stretch' }]} onPress={() => { setSmartNotFound(false); setAddMode('manual'); }}>
+                    <Text style={s.saveBtnText}>Shto manualisht</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={{ marginTop: 12 }} onPress={() => setSmartNotFound(false)}>
+                    <Text style={{ color: theme.textSecondary }}>Provo prapë</Text>
+                  </TouchableOpacity>
+                </View>
               ) : (
               <>
                 <Text style={s.label}>Lidh pajisjen smart</Text>
                 <View style={s.smartMethodRow}>
-                  <TouchableOpacity style={s.smartMethodCard} onPress={() => { setSmartMethod('qr'); setSmartSearching(true); }} activeOpacity={0.8}>
+                  <TouchableOpacity style={s.smartMethodCard} onPress={() => { setSmartMethod('qr'); setSmartNotFound(false); setSmartSearching(true); }} activeOpacity={0.8}>
                     <Ionicons name="qr-code-outline" size={26} color={theme.primary} />
                     <Text style={s.smartMethodText}>Skano QR</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={s.smartMethodCard} onPress={() => { setSmartMethod('net'); setSmartSearching(true); }} activeOpacity={0.8}>
+                  <TouchableOpacity style={s.smartMethodCard} onPress={() => { setSmartMethod('net'); setSmartNotFound(false); setSmartSearching(true); }} activeOpacity={0.8}>
                     <Ionicons name="wifi-outline" size={26} color={theme.primary} />
                     <Text style={s.smartMethodText}>Përmes internetit</Text>
                   </TouchableOpacity>
@@ -369,10 +393,10 @@ export default function DevicesScreen() {
               </>
             )}
 
-            {!(addMode === 'smart' && smartSearching) && (
+            {!(addMode === 'smart' && (smartSearching || smartNotFound)) && (
               <TouchableOpacity style={s.saveBtn} onPress={ruajPajisje}><Text style={s.saveBtnText}>Ruaj</Text></TouchableOpacity>
             )}
-            <TouchableOpacity style={{ marginTop: 15, alignItems: 'center' }} onPress={() => { setSmartSearching(false); setModalVisible(false); }}><Text style={{ color: theme.textSecondary }}>Anulo</Text></TouchableOpacity>
+            <TouchableOpacity style={{ marginTop: 15, alignItems: 'center' }} onPress={() => { setSmartSearching(false); setSmartNotFound(false); setModalVisible(false); }}><Text style={{ color: theme.textSecondary }}>Anulo</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>

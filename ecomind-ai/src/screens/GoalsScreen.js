@@ -6,6 +6,7 @@ import { useTheme } from '../theme/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../data/supabase';
 import { showAlert } from '../data/alertHelper';
+import { KG_CO2_PER_KWH } from '../data/kescoTariff';
 
 const GoalCard = ({ title, current, target, unit, color, icon, theme, onDelete }) => {
   const progress = current > 0 && target > 0 ? Math.min(100, (target / current) * 100) : 0;
@@ -72,7 +73,7 @@ export default function GoalsScreen({ navigation }) {
 
   const applyCurrent = (list, cons) => list.map(g => ({
     ...g,
-    current: g.unit === '€' ? cons.amount : g.unit === 'kg CO₂' ? parseFloat((cons.kwh * 0.4).toFixed(1)) : cons.kwh,
+    current: g.unit === '€' ? cons.amount : g.unit === 'kg CO₂' ? parseFloat((cons.kwh * KG_CO2_PER_KWH).toFixed(1)) : cons.kwh,
   }));
 
   const loadGoals = async () => {
@@ -120,7 +121,7 @@ export default function GoalsScreen({ navigation }) {
       id: Date.now(),
       title: newGoal.title,
       target: parseFloat(newGoal.target),
-      current: newGoal.unit === '€' ? consumption.amount : newGoal.unit === 'kg CO₂' ? parseFloat((consumption.kwh * 0.4).toFixed(1)) : consumption.kwh,
+      current: newGoal.unit === '€' ? consumption.amount : newGoal.unit === 'kg CO₂' ? parseFloat((consumption.kwh * KG_CO2_PER_KWH).toFixed(1)) : consumption.kwh,
       unit: newGoal.unit,
       color: theme.primary,
       icon: 'star'
@@ -179,7 +180,7 @@ export default function GoalsScreen({ navigation }) {
       // Pick a random one from remaining
       const tpl = available[Math.floor(Math.random() * available.length)];
       const target = tpl.target(lastKwh, lastAmount);
-      const current = tpl.unit === '€' ? lastAmount : tpl.unit === 'kg CO₂' ? parseFloat((lastKwh * 0.4).toFixed(1)) : lastKwh;
+      const current = tpl.unit === '€' ? lastAmount : tpl.unit === 'kg CO₂' ? parseFloat((lastKwh * KG_CO2_PER_KWH).toFixed(1)) : lastKwh;
 
       const aiGoal = {
         id: Date.now(),

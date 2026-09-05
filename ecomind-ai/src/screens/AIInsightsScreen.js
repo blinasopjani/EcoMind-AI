@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const InsightCard = ({ title, desc, icon, color, theme }) => (
   <View style={styles(theme).insightCard}>
@@ -39,8 +40,8 @@ export default function AIInsightsScreen() {
     setLoading(true);
     try {
       const uid = await AsyncStorage.getItem('user_id');
-      const { data: bills } = await supabase.from('bills').select('*').order('created_at', { ascending: false });
-      const { data: devices } = await supabase.from('devices').select('*');
+      const { data: bills } = await supabase.from('bills').select('*').eq('user_id', uid).order('created_at', { ascending: false });
+      const { data: devices } = await supabase.from('devices').select('*').eq('user_id', uid);
       // Vetëm çelësat e këtij përdoruesi (pa fallback global — që një user të mos shohë të dhënat e tjetrit)
       const houseStr = uid ? await AsyncStorage.getItem(`${uid}_house_data`) : null;
       const localDevsStr = uid ? await AsyncStorage.getItem(`${uid}_user_devices`) : null;

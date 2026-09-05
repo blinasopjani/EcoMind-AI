@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, TextInput, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, TextInput, Modal, ActivityIndicator, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
@@ -82,6 +82,10 @@ export default function SettingsScreen({ navigation }) {
       const redeemed = JSON.parse((await AsyncStorage.getItem(`${uid}_redeemed_rewards`)) || '[]');
       setRedeemedRewards(redeemed);
 
+      // 6. Preferenca e njoftimeve (e ruajtur per-user)
+      const notif = await AsyncStorage.getItem(`${uid}_notifications_enabled`);
+      setNotifications(notif === null ? true : notif === '1');
+
       setStats({
         deviceCount: devicesData?.length || 0,
         lastBill: billsData?.[0] || null,
@@ -111,14 +115,18 @@ export default function SettingsScreen({ navigation }) {
         await supabase.from('users').update({ full_name: formData.emri }).eq('id', uid);
         await AsyncStorage.setItem('user_name', formData.emri);
       } else {
-        // Ruajmë të dhënat e shtëpisë me user_id prefix
+        // Ruajmë të dhënat e shtëpisë me user_id prefix — BASHKOJMË me ekzistueset
+        // që të mos humbin fushat e tjera të onboarding-ut (ngrohja, ftohja, izolimi,
+        // m2, llojiBanese, objektivi...) që AI-ja dhe ekranet e tjera i përdorin.
         const uid = await AsyncStorage.getItem('user_id');
-        const houseData = { 
-          banimi: formData.banimi, 
-          personat: formData.personat, 
-          buxheti: formData.buxheti 
-        };
         const key = uid ? `${uid}_house_data` : 'house_data';
+        const existing = JSON.parse((await AsyncStorage.getItem(key)) || '{}');
+        const houseData = {
+          ...existing,
+          banimi: formData.banimi,
+          personat: formData.personat,
+          buxheti: formData.buxheti,
+        };
         await AsyncStorage.setItem(key, JSON.stringify(houseData));
       }
       setUserData({ ...formData });
@@ -152,6 +160,72 @@ export default function SettingsScreen({ navigation }) {
     await AsyncStorage.removeItem('user_name');
     await supabase.auth.signOut();
     navigation.replace('Login');
+  };
+
+  // Eksporton faturat e përdoruesit si skedar CSV (shkarkim në web)
+  const exportBills = async () => {
+    try {
+      const uid = await AsyncStorage.getItem('user_id');
+      const { data: bills } = await supabase.from('bills').select('*').eq('user_id', uid).order('created_at', { ascending: false });
+      if (!bills || bills.length === 0) {
+        showAlert('Nuk ka fatura', 'Nuk ke asnjë faturë të ruajtur për ta eksportuar.');
+        return;
+      }
+      const cols = ['date', 'kwh', 'amount', 'provider', 'dpr', 'created_at'];
+      const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const csv = [cols.join(',')].concat(bills.map(b => cols.map(c => esc(b[c])).join(','))).join('\n');
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ecomind_faturat_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showAlert('U eksportua', `${bills.length} fatura u shkarkuan si CSV.`);
+      } else {
+        showAlert('Eksporti', 'Shkarkimi si skedar mbështetet në versionin web të app-it.');
+      }
+    } catch (e) {
+      showAlert('Gabim', 'Nuk u eksportuan faturat. Provoni përsëri.');
+    }
+  };
+
+  // Fshin të gjitha të dhënat e përdoruesit (fatura, pajisje, profil) dhe e shkyç.
+  // Shënim: fshirja e plotë e llogarisë Auth kërkon të drejta admin (server-side).
+  const deleteAccountData = () => {
+    showAlert(
+      'Fshi të dhënat',
+      'Kjo fshin PËRGJITHMONË të gjitha faturat, pajisjet dhe profilin tënd, dhe të shkyç. Ky veprim s\'kthehet. A je i sigurt?',
+      [
+        { text: 'Anulo', style: 'cancel' },
+        {
+          text: 'Fshi gjithçka', style: 'destructive', onPress: async () => {
+            try {
+              const uid = await AsyncStorage.getItem('user_id');
+              // Provo fshirjen e plotë server-side (përfshin llogarinë Auth) nëse
+              // Edge Function 'delete-account' është deploy-uar. Nëse jo, vazhdojmë
+              // me fshirjen nga klienti (të dhënat) — funksionon gjithsesi.
+              try { await supabase.functions.invoke('delete-account'); } catch (_) {}
+              if (uid) {
+                await supabase.from('bills').delete().eq('user_id', uid);
+                await supabase.from('devices').delete().eq('user_id', uid);
+                await supabase.from('users').delete().eq('id', uid);
+                const allKeys = await AsyncStorage.getAllKeys();
+                const mine = (allKeys || []).filter(k => k.startsWith(`${uid}_`));
+                if (mine.length) await AsyncStorage.multiRemove(mine);
+              }
+              await AsyncStorage.removeItem('user_id');
+              await AsyncStorage.removeItem('user_name');
+              await supabase.auth.signOut();
+              navigation.replace('Login');
+            } catch (e) {
+              showAlert('Gabim', 'Diçka shkoi keq gjatë fshirjes. Provoni përsëri.');
+            }
+          }
+        },
+      ]
+    );
   };
 
   if (loading && userData.emri === '...') {
@@ -274,7 +348,15 @@ export default function SettingsScreen({ navigation }) {
             <Text style={s.sectionTitle}>Preferencat</Text>
             <View style={s.card}>
               <SettingRow icon="moon" label="Mënyra e Errët" type="toggle" value={isDarkMode} onToggle={toggleTheme} color={theme.accent3} theme={theme} />
-              <SettingRow icon="notifications" label="Njoftimet" type="toggle" value={notifications} onToggle={setNotifications} color={theme.primary} theme={theme} />
+              <SettingRow icon="notifications" label="Njoftimet" type="toggle" value={notifications} onToggle={async (v) => { setNotifications(v); try { const uid = await AsyncStorage.getItem('user_id'); if (uid) await AsyncStorage.setItem(`${uid}_notifications_enabled`, v ? '1' : '0'); } catch (_) {} }} color={theme.primary} theme={theme} />
+            </View>
+          </View>
+
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Të dhënat</Text>
+            <View style={s.card}>
+              <SettingRow icon="download-outline" label="Eksporto faturat" sub="Shkarko faturat e tua si CSV" onPress={exportBills} color={theme.info} theme={theme} />
+              <SettingRow icon="trash-outline" label="Fshi të dhënat e llogarisë" sub="Fatura, pajisje dhe profili — përgjithmonë" onPress={deleteAccountData} color="#EF4444" theme={theme} />
             </View>
           </View>
 

@@ -1,6 +1,8 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { supabase } from '../data/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -146,15 +148,39 @@ function MainTabs() {
 }
 
 export default function AppNavigator() {
+  // Rikthim automatik i sesionit: nëse useri është ende i kyçur, hapet direkt te Main
+  const [booting, setBooting] = useState(true);
+  const [initialRoute, setInitialRoute] = useState('Login');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const uid = await AsyncStorage.getItem('user_id');
+        if (data?.session && uid) setInitialRoute('Main');
+      } catch (_) {}
+      setBooting(false);
+    })();
+  }, []);
+
+  if (booting) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0A0F1E' }}>
+        <ActivityIndicator size="large" color="#10B981" />
+      </View>
+    );
+  }
+
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
+      <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen name="AI" component={AIInsightsScreen} />
         <Stack.Screen name="Analytics" component={AnalyticsScreen} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

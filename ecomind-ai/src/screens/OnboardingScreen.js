@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { computeKescoBill } from '../data/kescoTariff';
+import { computeKescoBill, KWH_TO_EUR } from '../data/kescoTariff';
 
 const MONTHS_SQ = ['Janar', 'Shkurt', 'Mars', 'Prill', 'Maj', 'Qershor',
   'Korrik', 'Gusht', 'Shtator', 'Tetor', 'Nëntor', 'Dhjetor'];
@@ -291,6 +291,8 @@ export default function OnboardingScreen({ navigation, route }) {
           unit: '€',
           current: 0,
           category: 'Buxheti',
+          color: '#00C896',
+          icon: 'wallet',
         },
       ];
       const goalsKey = uid ? `${uid}_user_goals` : 'user_goals';
@@ -333,7 +335,7 @@ export default function OnboardingScreen({ navigation, route }) {
       // 5. Ruajtja e faturës bazë nëse s'u ruajt manualisht
       if (!billSaved && faturaMesatare) {
         const estAmount = parseFloat(faturaMesatare) || 50;
-        const estKwh = Math.round(estAmount / 0.08);
+        const estKwh = Math.round(estAmount / KWH_TO_EUR);
         const initBill = {
           amount: estAmount,
           kwh: estKwh,

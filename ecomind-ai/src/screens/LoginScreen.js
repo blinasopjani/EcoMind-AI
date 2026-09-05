@@ -15,6 +15,7 @@ export default function LoginScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [infoMsg, setInfoMsg] = useState('');
 
   const handleLogin = async () => {
     setErrorMsg('');
@@ -57,6 +58,30 @@ export default function LoginScreen({ navigation }) {
     } catch (error) {
       console.error('Login Error:', error);
       setErrorMsg('Ndodhi një gabim gjatë hyrjes.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setErrorMsg(''); setInfoMsg('');
+    const target = toEmail(email);
+    if (!email) {
+      setErrorMsg('Shkruani email-in tuaj për të rivendosur fjalëkalimin.');
+      return;
+    }
+    // Rivendosja kërkon email real — jo emër përdoruesi (që kthehet në @ecomind.app)
+    if (!target.includes('@') || target.endsWith('@ecomind.app')) {
+      setErrorMsg('Rivendosja kërkon një email real. Nëse u regjistruat me emër përdoruesi, kontaktoni mbështetjen.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(target);
+      if (error) { setErrorMsg(error.message || 'Nuk u dërgua dot email-i.'); return; }
+      setInfoMsg('Të dërguam një email për rivendosjen e fjalëkalimit. Kontrolloni kutinë tuaj.');
+    } catch (e) {
+      setErrorMsg('Nuk u dërgua dot email-i i rivendosjes.');
     } finally {
       setLoading(false);
     }
@@ -108,7 +133,12 @@ export default function LoginScreen({ navigation }) {
             </View>
           </View>
 
+          <TouchableOpacity onPress={handleForgotPassword} style={{ alignSelf: 'flex-end', marginBottom: 6 }}>
+            <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>Harrova fjalëkalimin?</Text>
+          </TouchableOpacity>
+
           {errorMsg ? <Text style={s.errorText}>{errorMsg}</Text> : null}
+          {infoMsg ? <Text style={[s.errorText, { color: theme.success || '#10B981' }]}>{infoMsg}</Text> : null}
 
           <TouchableOpacity style={s.loginBtn} onPress={handleLogin} disabled={loading}>
             <LinearGradient colors={theme.gradientPrimary} style={s.loginBtnInner}>

@@ -6,6 +6,8 @@ import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../data/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
+import { showAlert } from '../data/alertHelper';
+import { deviceMonthlyKwh, KG_CO2_PER_KWH } from '../data/kescoTariff';
 
 const { width } = Dimensions.get('window');
 
@@ -32,6 +34,7 @@ export default function AnalyticsScreen() {
   const s = styles(theme);
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState({
     totalKwh: 0,
     totalEuro: 0,
@@ -41,8 +44,8 @@ export default function AnalyticsScreen() {
     changeEuro: '0%'
   });
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const uid = await AsyncStorage.getItem('user_id');
       if (!uid) return;
@@ -77,10 +80,11 @@ export default function AnalyticsScreen() {
 
       let devDist = [];
       if (devices && devices.length > 0) {
-        const totalPower = devices.reduce((sum, d) => sum + (d.avg_consumption || 0), 0) || 1;
+        // Ndarja sipas ENERGJISË së vlerësuar (kWh/muaj), jo vetëm Watt-eve
+        const totalKwh = devices.reduce((sum, d) => sum + deviceMonthlyKwh(d), 0) || 1;
         devDist = devices.map(d => ({
           name: d.name,
-          percent: Math.round(((d.avg_consumption || 0) / totalPower) * 100),
+          percent: Math.round((deviceMonthlyKwh(d) / totalKwh) * 100),
           color: d.type === 'ac' ? theme.primary : theme.info
         })).sort((a, b) => b.percent - a.percent).slice(0, 4);
       }
@@ -88,24 +92,55 @@ export default function AnalyticsScreen() {
       setStats({
         totalKwh: currentKwh,
         totalEuro: currentEuro,
-        co2: (currentKwh * 0.45).toFixed(1),
+        co2: (currentKwh * KG_CO2_PER_KWH).toFixed(1),
         devicesDist: devDist,
         changeKwh: changeK,
         changeEuro: changeE,
         hasBills: !!(bills && bills.length > 0),
-        history: (bills || []).slice(0, 6).map(b => ({ date: b.date || '—', kwh: b.kwh || 0, amount: b.amount || 0 })),
+        history: (bills || []).slice(0, 6).map(b => ({ id: b.id, date: b.date || '—', kwh: b.kwh || 0, amount: b.amount || 0 })),
       });
     } catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => { setRefreshing(true); fetchData(true); };
+
+  const deleteBill = (id) => {
+    if (!id) return;
+    showAlert(
+      'Fshi Faturën',
+      'A jeni të sigurt që doni ta fshini këtë faturë? Ky veprim s\'kthehet dhe ndikon te analizat.',
+      [
+        { text: 'Anulo', style: 'cancel' },
+        {
+          text: 'Fshi', style: 'destructive', onPress: async () => {
+            try {
+              const uid = await AsyncStorage.getItem('user_id');
+              await supabase.from('bills').delete().eq('id', id).eq('user_id', uid);
+              fetchData(true);
+            } catch (e) {
+              showAlert('Gabim', 'Nuk u fshi fatura. Provoni përsëri.');
+            }
+          }
+        },
+      ]
+    );
   };
 
   useEffect(() => { fetchData(); }, []);
 
+  // Rifresko sa herë hapet ekrani (që të mos tregojë të dhëna të vjetruara)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => fetchData(true));
+    return unsubscribe;
+  }, [navigation]);
+
   return (
-    <ScrollView style={s.container} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} colors={[theme.primary]} />}>
+    <ScrollView style={s.container} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} tintColor={theme.primary} />}>
       <LinearGradient colors={isDarkMode ? ['#0A0F1E', '#111827'] : ['#F8FAFC', '#F1F5F9']} style={s.header}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity 
@@ -157,10 +192,15 @@ export default function AnalyticsScreen() {
               <Text style={s.sectionTitle}>Historiku i Faturave</Text>
               <View style={s.deviceStats}>
                 {(stats.history || []).map((h, i) => (
-                  <View key={i} style={s.histRow}>
+                  <View key={h.id || i} style={s.histRow}>
                     <Text style={s.histDate}>{h.date}</Text>
                     <Text style={s.histKwh}>{h.kwh} kWh</Text>
                     <Text style={s.histAmount}>{h.amount} €</Text>
+                    {h.id ? (
+                      <TouchableOpacity onPress={() => deleteBill(h.id)} style={{ paddingLeft: 12 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="Fshi faturën">
+                        <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 ))}
               </View>
