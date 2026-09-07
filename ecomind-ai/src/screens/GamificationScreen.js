@@ -194,11 +194,6 @@ const ALL_CHALLENGES = [
     desc: 'Shfrytëzoni dritën natyrale të diellit gjatë gjithë ditës. Mos ndizni asnjë llambë deri në perëndim të diellit. Kurseni deri 1 kWh/ditë.',
     points: 180, time: '1 ditë', durationMs: 43200000, icon: 'sunny', color: '#EAB308',
   },
-  {
-    id: 'c_test', title: 'Sfida Provuese 10 Sekondash', sub: 'Provo sistemin e sfidave!',
-    desc: 'Kjo sfidë është vetëm për testim. Prit 10 sekonda, kthehu dhe shtyp "Mërr pikët" për të fituar 50 pikë falas.',
-    points: 50, time: '10 sekonda', durationMs: 10000, icon: 'flash', color: '#8B5CF6',
-  },
 ];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -395,9 +390,7 @@ export default function GamificationScreen() {
 
   if (loading) return <View style={[s.container, { justifyContent: 'center' }]}><ActivityIndicator color={theme.primary} /></View>;
 
-  // Split challenges into weekly & test sections
-  const weeklyChallenges = ALL_CHALLENGES.filter(c => c.id !== 'c_test');
-  const testChallenge = ALL_CHALLENGES.find(c => c.id === 'c_test');
+  const weeklyChallenges = ALL_CHALLENGES;
 
   // Distinktivët - të fituara nga të dhënat reale
   const badges = [
@@ -506,22 +499,6 @@ export default function GamificationScreen() {
                   timeLeft={inProgressChallenges.find(c => c.id === ch.id) ? getTimeLeft(inProgressChallenges.find(c => c.id === ch.id).deadline) : null}
                 />
               ))}
-
-              {testChallenge && (
-                <>
-                  <Text style={[s.sectionTitle, { marginTop: 20 }]}>Sfida Provuese</Text>
-                  <ChallengeCard
-                    {...testChallenge}
-                    theme={theme}
-                    onStart={handleStartChallenge}
-                    onComplete={handleCompleteChallenge}
-                    onInfo={handleChallengeInfo}
-                    isCompleted={completedChallenges.includes(testChallenge.id)}
-                    isInProgress={!!inProgressChallenges.find(c => c.id === testChallenge.id)}
-                    timeLeft={inProgressChallenges.find(c => c.id === testChallenge.id) ? getTimeLeft(inProgressChallenges.find(c => c.id === testChallenge.id).deadline) : null}
-                  />
-                </>
-              )}
             </>
           )}
 

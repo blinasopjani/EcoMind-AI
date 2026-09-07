@@ -1,0 +1,5 @@
+# Konfigurimi i projektit Supabase për EcoMind AI+
+project_id = "mibwoiofocgtteyxcezs"
+
+[functions.delete-account]
+verify_jwt = true
