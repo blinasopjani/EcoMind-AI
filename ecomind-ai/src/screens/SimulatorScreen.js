@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Animated, Dimensions, ActivityIndicator, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
@@ -44,10 +44,12 @@ export default function SimulatorScreen() {
   const [vA2, setVA2] = useState('');
   const [vCharged, setVCharged] = useState('');
 
-  const moneySaved = ((currentBill * reduction) / 100).toFixed(1);
-  const newBill = (currentBill - moneySaved).toFixed(1);
+  const billNum = Number(currentBill) || 0;
+  const moneySavedNum = (billNum * reduction) / 100;
+  const moneySaved = moneySavedNum.toFixed(1);
+  const newBill = (billNum - moneySavedNum).toFixed(1);
   const co2Reduced = (reduction * 1.56).toFixed(0);
-  const yearlyProjection = (moneySaved * 12).toFixed(0);
+  const yearlyProjection = (moneySavedNum * 12).toFixed(0);
 
   const fetchData = async () => {
     setLoading(true);
@@ -76,15 +78,12 @@ export default function SimulatorScreen() {
       setCurrentBill(0);
     } finally {
       setLoading(false);
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     }
   };
 
   const handleSlider = (val) => {
     setReduction(val);
   };
-
-  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchData();
@@ -173,7 +172,7 @@ export default function SimulatorScreen() {
           </View>
         </View>
 
-        <Animated.View style={{ opacity: fadeAnim }}>
+        <View>
           <View style={s.billCompare}>
             <View style={s.billBox}>
               <Text style={s.billBoxLabel}>Fatura Aktuale</Text>
@@ -231,7 +230,7 @@ export default function SimulatorScreen() {
               </Text>
             </View>
           </LinearGradient>
-        </Animated.View>
+        </View>
 
         {/* Plani i Kursimit */}
         {savingActions.length > 0 && (
